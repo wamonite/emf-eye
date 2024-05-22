@@ -18,7 +18,8 @@ log.addHandler(log_handler)
 
 
 FPS_TARGET = 60
-SPHERE_STEPS = 20
+POINT_OFFSET = 0.002
+SPHERE_STEPS = 25
 
 
 class Warp(IntEnum):
@@ -112,7 +113,7 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
 
     if show_points:
         display_aspect = display_resolution[0] / display_resolution[1]
-        point_offset_x = 0.0025
+        point_offset_x = POINT_OFFSET
         point_offset_y = point_offset_x * display_aspect
         GL.glColor3f(1.0, 1.0, 1.0)
         for point in points:
