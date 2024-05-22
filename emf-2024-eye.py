@@ -7,6 +7,7 @@ import pygame
 from OpenGL import GL
 import numpy as np
 from enum import IntEnum
+from math import sin, cos, pi
 import logging
 
 
@@ -17,6 +18,7 @@ log.addHandler(log_handler)
 
 
 FPS_TARGET = 60
+SPHERE_STEPS = 20
 
 
 class Warp(IntEnum):
@@ -122,7 +124,19 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
             GL.glEnd()
 
 
-def load_warp(warp_num):
+def sphere_x(v):
+    t = v * pi
+    return (1.0 - cos(t)) / 2.0
+
+
+def sphere_y(v):
+    t = v * pi
+    return sin(t)
+
+
+def load_warp(warp_num, display_resolution):
+    display_aspect = display_resolution[0] / display_resolution[1]
+
     match warp_num:
         case 0:
             return np.array(
@@ -134,12 +148,18 @@ def load_warp(warp_num):
             )
 
         case 1:
+            coord_array = []
+            for y in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
+                row = []
+                y_scale = sphere_y(y)
+                for x in [sphere_x(v / SPHERE_STEPS) for v in range(SPHERE_STEPS + 1)]:
+                    row.append(
+                        [(((x - 0.5) * y_scale) / display_aspect) + 0.5, sphere_x(y)],
+                    )
+                coord_array.append(row)
+
             return np.array(
-                [
-                    [[0.1, 0.1], [0.5, 0.0], [0.9, 0.1]],
-                    [[0.0, 0.5], [0.5, 0.5], [1.0, 0.5]],
-                    [[0.1, 0.9], [0.5, 1.0], [0.9, 0.9]],
-                ],
+                coord_array,
                 np.float32,
             )
 
@@ -180,7 +200,7 @@ def run():
     tx_x, tx_y = 0.0, 0.0
     show_points = False
     warp_num = next(iter(Warp))
-    coord_array = load_warp(warp_num)
+    coord_array = None
     try:
         while True:
             for event in pygame.event.get():
@@ -196,10 +216,13 @@ def run():
                         if warp_num not in Warp:
                             warp_num = next(iter(Warp))
 
-                        coord_array = load_warp(warp_num)
+                        coord_array = None
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
+
+            if coord_array is None:
+                coord_array = load_warp(warp_num, display_resolution)
 
             nmx, nmy = pygame.mouse.get_pos()
             dmx, dmy = 0.0, 0.0
