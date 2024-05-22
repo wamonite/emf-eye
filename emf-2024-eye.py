@@ -8,6 +8,7 @@ from OpenGL import GL
 import numpy as np
 from enum import IntEnum
 from math import sin, cos, pi
+import json
 import logging
 
 
@@ -20,12 +21,13 @@ log.addHandler(log_handler)
 FPS_TARGET = 60
 POINT_OFFSET = 0.002
 SPHERE_STEPS = 25
+CUSTOM_STEPS = 10
 
 
 class Warp(IntEnum):
-    WARP_NONE = 0
-    WARP_SPHERE = 1
-    # WARP_CUSTOM = 2
+    NONE = 0
+    SPHERE = 1
+    CUSTOM = 2
 
 
 class QuitException(Exception):
@@ -69,7 +71,14 @@ def load_texture(file_name):
     return tx_ref
 
 
-def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_points):
+def render_texture(
+    tx_ref,
+    display_resolution,
+    coord_array,
+    offset_coord,
+    show_points,
+    mouse_pos,
+):
     GL.glEnable(GL.GL_TEXTURE_2D)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
 
@@ -99,8 +108,8 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
             GL.glTexCoord2f(s_x_pos, s_y_pos_1)
             GL.glVertex3f(d_pos_1[0], d_pos_1[1], 0.0)
 
-            points.add((d_pos_0[0], d_pos_0[1]))
-            points.add((d_pos_1[0], d_pos_1[1]))
+            points.add(((d_pos_0[0], d_pos_0[1]), (s_x_idx, s_y_idx)))
+            points.add(((d_pos_1[0], d_pos_1[1]), (s_x_idx, s_y_idx + 1)))
 
             log.debug("s %s %s", s_x_pos, s_y_pos_0)
             log.debug("s %s %s", s_x_pos, s_y_pos_1)
@@ -111,18 +120,32 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
 
     GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
 
+    selected = None
     if show_points:
         display_aspect = display_resolution[0] / display_resolution[1]
         point_offset_x = POINT_OFFSET
         point_offset_y = point_offset_x * display_aspect
-        GL.glColor3f(1.0, 1.0, 1.0)
         for point in points:
+            GL.glColor3f(1.0, 1.0, 1.0)
+
+            if (
+                mouse_pos
+                and mouse_pos[0] >= point[0][0] - point_offset_x
+                and mouse_pos[0] < point[0][0] + point_offset_x
+                and mouse_pos[1] >= point[0][1] - point_offset_y
+                and mouse_pos[1] < point[0][1] + point_offset_y
+            ):
+                GL.glColor3f(1.0, 0.0, 1.0)
+                selected = point
+
             GL.glBegin(GL.GL_LINE_LOOP)
-            GL.glVertex2f(point[0] - point_offset_x, point[1] - point_offset_y)
-            GL.glVertex2f(point[0] - point_offset_x, point[1] + point_offset_y)
-            GL.glVertex2f(point[0] + point_offset_x, point[1] + point_offset_y)
-            GL.glVertex2f(point[0] + point_offset_x, point[1] - point_offset_y)
+            GL.glVertex2f(point[0][0] - point_offset_x, point[0][1] - point_offset_y)
+            GL.glVertex2f(point[0][0] - point_offset_x, point[0][1] + point_offset_y)
+            GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] + point_offset_y)
+            GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] - point_offset_y)
             GL.glEnd()
+
+    return selected
 
 
 def sphere_x(v):
@@ -135,11 +158,32 @@ def sphere_y(v):
     return sin(t)
 
 
-def load_warp(warp_num, display_resolution):
+def load_warp():
+    try:
+        with open("warp.json") as file_object:
+            return json.load(file_object)
+
+    except FileNotFoundError:
+        pass
+
+    coord_array = []
+    for y in [v / CUSTOM_STEPS for v in range(CUSTOM_STEPS + 1)]:
+        row = []
+        for x in [v / CUSTOM_STEPS for v in range(CUSTOM_STEPS + 1)]:
+            row.append([x, y])
+        coord_array.append(row)
+
+    return np.array(
+        coord_array,
+        np.float32,
+    )
+
+
+def get_warp(warp_num, display_resolution):
     display_aspect = display_resolution[0] / display_resolution[1]
 
     match warp_num:
-        case 0:
+        case Warp.NONE:
             return np.array(
                 [
                     [[0.0, 0.0], [1.0, 0.0]],
@@ -148,7 +192,7 @@ def load_warp(warp_num, display_resolution):
                 np.float32,
             )
 
-        case 1:
+        case Warp.SPHERE:
             coord_array = []
             for y in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
                 row = []
@@ -163,6 +207,9 @@ def load_warp(warp_num, display_resolution):
                 coord_array,
                 np.float32,
             )
+
+        case Warp.CUSTOM:
+            return load_warp()
 
         case _:
             raise GameException(f"load_warp {warp_num} not implemented")
@@ -202,32 +249,46 @@ def run():
     show_points = False
     warp_num = next(iter(Warp))
     coord_array = None
+    mouse_move = False
+
+    pygame.mouse.set_visible(show_points)
+
     try:
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_p:
-                        show_points = not show_points
-
                     if event.key == pygame.K_q:
                         raise QuitException()
+
+                    if event.key == pygame.K_p:
+                        show_points = not show_points
+                        pygame.mouse.set_visible(show_points)
 
                     if event.key == pygame.K_w:
                         warp_num += 1
                         if warp_num not in Warp:
                             warp_num = next(iter(Warp))
 
+                        # reset to ensure it is reread
                         coord_array = None
+
+                    if event.key == pygame.K_m:
+                        mouse_move = not mouse_move
+
+                        # reset texture offset
+                        if not mouse_move:
+                            tx_x, tx_y = 0.0, 0.0
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
 
             if coord_array is None:
-                coord_array = load_warp(warp_num, display_resolution)
+                coord_array = get_warp(warp_num, display_resolution)
 
+            # get texture offset from mouse move
             nmx, nmy = pygame.mouse.get_pos()
             dmx, dmy = 0.0, 0.0
-            if mx != nmx or my != nmy:
+            if mouse_move and (mx != nmx or my != nmy):
                 if mx is not None:
                     dmx = (nmx - mx) / display_resolution[0]
                     dmy = (nmy - my) / display_resolution[1]
@@ -238,13 +299,22 @@ def run():
 
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
-            render_texture(
+            selected_point = render_texture(
                 tx_ref,
                 display_resolution,
                 coord_array,
                 (tx_x, tx_y),
                 show_points,
+                (
+                    (nmx / display_resolution[0], 1.0 - (nmy / display_resolution[1]))
+                    if warp_num == Warp.CUSTOM
+                    else None
+                ),
             )
+
+            # TODO do stuff with this info
+            if selected_point:
+                print(selected_point)
 
             pygame.display.flip()
 
