@@ -18,6 +18,7 @@ log.addHandler(log_handler)
 # log.setLevel(logging.DEBUG)
 
 
+RESOLUTION_TARGET = (1920, 1080)
 FPS_TARGET = 60
 POINT_OFFSET = 0.002
 SPHERE_STEPS = 25
@@ -226,11 +227,15 @@ def run():
 
     # initialise the display
     pygame.init()
-    display_resolution = (1920, 1200)
+
+    display_resolution = RESOLUTION_TARGET
     display_flags = pygame.OPENGL | pygame.DOUBLEBUF
     if args.fullscreen:
         display_flags |= pygame.FULLSCREEN
-    pygame.display.set_mode(display_resolution, display_flags, vsync=1)
+    display = pygame.display.set_mode(display_resolution, display_flags, vsync=1)
+    if args.fullscreen:
+        display_resolution = display.get_size()
+
     clock = pygame.time.Clock()
 
     # orthographic projection - (0, 0) bottom left, (1, 1) top right
