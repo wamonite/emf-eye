@@ -6,9 +6,23 @@ import argparse
 import pygame
 from OpenGL import GL
 import numpy as np
+from enum import IntEnum
+import logging
+
+
+log = logging.getLogger()
+log_handler = logging.StreamHandler()
+log.addHandler(log_handler)
+# log.setLevel(logging.DEBUG)
 
 
 FPS_TARGET = 60
+
+
+class Warp(IntEnum):
+    WARP_NONE = 0
+    WARP_SPHERE = 1
+    # WARP_CUSTOM = 2
 
 
 class QuitException(Exception):
@@ -67,7 +81,7 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
         s_y_pos_1 += offset_coord[1]
 
         GL.glBegin(GL.GL_QUAD_STRIP)
-        # print("----")
+        log.debug("----")
 
         for s_x_idx in range(d_x_size):
             s_x_pos = s_x_idx / (d_x_size - 1)
@@ -85,10 +99,10 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
             points.add((d_pos_0[0], d_pos_0[1]))
             points.add((d_pos_1[0], d_pos_1[1]))
 
-            # print("s", s_x_pos, s_y_pos_0)
-            # print("s", s_x_pos, s_y_pos_1)
-            # print("d", d_pos_0[0], d_pos_0[1])
-            # print("d", d_pos_1[0], d_pos_1[1])
+            log.debug("s %s %s", s_x_pos, s_y_pos_0)
+            log.debug("s %s %s", s_x_pos, s_y_pos_1)
+            log.debug("d %s %s", d_pos_0[0], d_pos_0[1])
+            log.debug("d %s %s", d_pos_1[0], d_pos_1[1])
 
         GL.glEnd()
 
@@ -106,6 +120,31 @@ def render_texture(tx_ref, display_resolution, coord_array, offset_coord, show_p
             GL.glVertex2f(point[0] + point_offset_x, point[1] + point_offset_y)
             GL.glVertex2f(point[0] + point_offset_x, point[1] - point_offset_y)
             GL.glEnd()
+
+
+def load_warp(warp_num):
+    match warp_num:
+        case 0:
+            return np.array(
+                [
+                    [[0.0, 0.0], [1.0, 0.0]],
+                    [[0.0, 1.0], [1.0, 1.0]],
+                ],
+                np.float32,
+            )
+
+        case 1:
+            return np.array(
+                [
+                    [[0.1, 0.1], [0.5, 0.0], [0.9, 0.1]],
+                    [[0.0, 0.5], [0.5, 0.5], [1.0, 0.5]],
+                    [[0.1, 0.9], [0.5, 1.0], [0.9, 0.9]],
+                ],
+                np.float32,
+            )
+
+        case _:
+            raise GameException(f"load_warp {warp_num} not implemented")
 
 
 def run():
@@ -140,6 +179,8 @@ def run():
     mx, my = None, None
     tx_x, tx_y = 0.0, 0.0
     show_points = False
+    warp_num = next(iter(Warp))
+    coord_array = load_warp(warp_num)
     try:
         while True:
             for event in pygame.event.get():
@@ -149,6 +190,13 @@ def run():
 
                     if event.key == pygame.K_q:
                         raise QuitException()
+
+                    if event.key == pygame.K_w:
+                        warp_num += 1
+                        if warp_num not in Warp:
+                            warp_num = next(iter(Warp))
+
+                        coord_array = load_warp(warp_num)
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
@@ -166,14 +214,6 @@ def run():
 
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
-            coord_array = np.array(
-                [
-                    [[0.1, 0.1], [0.5, 0.0], [0.9, 0.1]],
-                    [[0.0, 0.5], [0.5, 0.5], [1.0, 0.5]],
-                    [[0.1, 0.9], [0.5, 1.0], [0.9, 0.9]],
-                ],
-                np.float32,
-            )
             render_texture(
                 tx_ref,
                 display_resolution,
