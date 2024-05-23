@@ -22,13 +22,13 @@ RESOLUTION_TARGET = (1920, 1080)
 FPS_TARGET = 60
 POINT_OFFSET = 0.002
 SPHERE_STEPS = 25
-CUSTOM_STEPS = 10
+CUSTOM_STEPS = 20
 
 
 class Warp(IntEnum):
-    NONE = 0
-    SPHERE = 1
-    CUSTOM = 2
+    CUSTOM = 0
+    NONE = 1
+    SPHERE = 2
 
 
 class QuitException(Exception):
@@ -162,7 +162,11 @@ def sphere_y(v):
 def load_warp():
     try:
         with open("warp.json") as file_object:
-            return json.load(file_object)
+            data = json.load(file_object)
+            return np.array(
+                data["coord_array"],
+                np.float32,
+            )
 
     except FileNotFoundError:
         pass
@@ -178,6 +182,17 @@ def load_warp():
         coord_array,
         np.float32,
     )
+
+
+def save_warp(coord_array):
+    data = {"coord_array": coord_array.tolist()}
+
+    try:
+        with open("warp.json", "w") as file_object:
+            return json.dump(data, file_object)
+
+    except Exception as e:
+        log.error("%s: %s", e.__class__.__name__, e)
 
 
 def get_warp(warp_num, display_resolution):
@@ -255,11 +270,17 @@ def run():
     warp_num = next(iter(Warp))
     coord_array = None
     mouse_move = False
+    point_move = False
+    selected_point = None
+    edit_point = None
 
     pygame.mouse.set_visible(show_points)
 
     try:
         while True:
+            nmx, nmy = pygame.mouse.get_pos()
+            ntx, nty = nmx / display_resolution[0], 1.0 - (nmy / display_resolution[1])
+
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
@@ -284,14 +305,27 @@ def run():
                         if not mouse_move:
                             tx_x, tx_y = 0.0, 0.0
 
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1 and warp_num == Warp.CUSTOM and selected_point:
+                        point_move = True
+                        edit_point = selected_point[1]
+
+                if event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1 and warp_num == Warp.CUSTOM:
+                        point_move = False
+                        edit_point = None
+                        save_warp(coord_array)
+
                 elif event.type == pygame.QUIT:
                     raise QuitException()
 
             if coord_array is None:
                 coord_array = get_warp(warp_num, display_resolution)
 
+            if point_move:
+                coord_array[edit_point[1]][edit_point[0]] = [ntx, nty]
+
             # get texture offset from mouse move
-            nmx, nmy = pygame.mouse.get_pos()
             dmx, dmy = 0.0, 0.0
             if mouse_move and (mx != nmx or my != nmy):
                 if mx is not None:
@@ -311,15 +345,11 @@ def run():
                 (tx_x, tx_y),
                 show_points,
                 (
-                    (nmx / display_resolution[0], 1.0 - (nmy / display_resolution[1]))
+                    (ntx, nty)
                     if warp_num == Warp.CUSTOM
                     else None
                 ),
             )
-
-            # TODO do stuff with this info
-            if selected_point:
-                print(selected_point)
 
             pygame.display.flip()
 
