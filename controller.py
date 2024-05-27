@@ -17,12 +17,15 @@ DEFAULTS_FILE_NAME = "controller.json"
 
 
 class Controller:
-    def __init__(self):
+    def __init__(self, sticky=True):
+        self.sticky = sticky
+
         # get the LPD8 device
         self.lpd8 = LPD8()
         self.lpd8.start()
         self.lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
-        self.lpd8.set_not_sticky_knob(LPD8_PROGRAM, Knobs.ALL_KNOBS)
+        if not self.sticky:
+            self.lpd8.set_not_sticky_knob(LPD8_PROGRAM, Knobs.ALL_KNOBS)
         self.lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
 
         self.update_flag = False
@@ -55,9 +58,11 @@ class Controller:
 
         return False
 
-    @property
-    def knobs(self):
-        return self.knob_values
+    def interpolate(self, v1, v2, knob_index, invert=False):
+        i = self.knob_values[knob_index]
+        if invert:
+            i = 1.0 - i
+        return ((v2 - v1) * i) + v1
 
     def update(self):
         self.lpd8.pad_update()
@@ -76,6 +81,9 @@ class Controller:
 
         except FileNotFoundError:
             pass
+
+        for idx, value in enumerate(self.knob_values):
+            self.lpd8.set_knob_value(LPD8_PROGRAM, idx + 1, value)
 
         self.update_flag = True
 

@@ -8,6 +8,7 @@ from OpenGL import GL
 import numpy as np
 from enum import IntEnum
 from controller import Controller
+from math import sin, cos, pi
 import logging
 
 
@@ -24,6 +25,12 @@ LINE_WIDTH_NORMAL = 2
 LINE_WIDTH_SELECTED = 8
 SPHERE_STEPS = 25
 CUSTOM_STEPS = 20
+Y_FAN_SCALE = 3
+KNOB_X_POS = 0
+KNOB_X_FAN = 1
+KNOB_ASPECT = 2
+KNOB_Y_POS = 4
+KNOB_Y_FAN = 5
 
 
 class Warp(IntEnum):
@@ -157,7 +164,17 @@ def render_texture(
 
 def get_warp(warp_num, display_resolution, controller):
     display_aspect = display_resolution[0] / display_resolution[1]
-    display_scale = ((display_aspect - 1.0) * controller.knobs[0]) + 1.0
+    display_scale = controller.interpolate(display_aspect, 1.0, KNOB_ASPECT, True)
+
+    def cos_curve(v, knob_index, invert):
+        t = v * pi
+        c = (1.0 - cos(t)) / 2.0
+        return controller.interpolate(c, v, knob_index, invert)
+
+    def sin_curve(v, knob_index, invert):
+        t = v * pi
+        c = sin(t)
+        return controller.interpolate(c, 1.0, knob_index, invert)
 
     match warp_num:
         case Warp.NONE:
@@ -172,10 +189,27 @@ def get_warp(warp_num, display_resolution, controller):
         case Warp.PARAMETER:
             coord_array = []
             for y in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
+                y_scale = sin_curve(y, KNOB_X_FAN, True)
+
                 row = []
                 for x in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
+                    x_pos = cos_curve(x, KNOB_X_POS, True)
+                    x_pos -= 0.5
+                    x_pos *= y_scale
+                    x_pos /= display_scale
+                    x_pos += 0.5
+
+                    y_fan = 1.0 - sin_curve(x, KNOB_Y_FAN, True)
+                    y_fan *= Y_FAN_SCALE
+                    y_fan += 1.0
+
+                    y_pos = cos_curve(y, KNOB_Y_POS, True)
+                    y_pos -= 0.5
+                    y_pos *= y_fan
+                    y_pos += 0.5
+
                     row.append(
-                        [(((x - 0.5)) / display_scale) + 0.5, y],
+                        [x_pos, y_pos],
                     )
                 coord_array.append(row)
 
