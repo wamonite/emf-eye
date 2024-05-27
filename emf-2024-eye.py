@@ -25,6 +25,8 @@ log.addHandler(log_handler)
 RESOLUTION_TARGET = (1920, 1080)
 FPS_TARGET = 60
 POINT_OFFSET = 0.002
+LINE_WIDTH_NORMAL = 2
+LINE_WIDTH_SELECTED = 8
 SPHERE_STEPS = 25
 CUSTOM_STEPS = 20
 # NOTE doesn't work with PGM_1 as it looks like I added 80 to the CC numbers for QLab
@@ -133,7 +135,8 @@ def render_texture(
         point_offset_x = POINT_OFFSET
         point_offset_y = point_offset_x * display_aspect
         for point in points:
-            GL.glColor3f(1.0, 1.0, 1.0)
+            GL.glLineWidth(LINE_WIDTH_NORMAL)
+            GL.glColor3f(1.0, 0.0, 0.0)
 
             if (
                 mouse_pos
@@ -142,6 +145,7 @@ def render_texture(
                 and mouse_pos[1] >= point[0][1] - point_offset_y
                 and mouse_pos[1] < point[0][1] + point_offset_y
             ):
+                GL.glLineWidth(LINE_WIDTH_SELECTED)
                 GL.glColor3f(1.0, 0.0, 1.0)
                 selected = point
 
@@ -151,6 +155,8 @@ def render_texture(
             GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] + point_offset_y)
             GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] - point_offset_y)
             GL.glEnd()
+
+        GL.glColor3f(1.0, 1.0, 1.0)
 
     return selected
 
