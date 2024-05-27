@@ -9,6 +9,10 @@ import numpy as np
 from enum import IntEnum
 from math import sin, cos, pi
 import json
+from lpd8.lpd8 import LPD8
+from lpd8.programs import Programs
+from lpd8.pads import Pad, Pads
+from lpd8.knobs import Knobs
 import logging
 
 
@@ -23,6 +27,9 @@ FPS_TARGET = 60
 POINT_OFFSET = 0.002
 SPHERE_STEPS = 25
 CUSTOM_STEPS = 20
+# NOTE doesn't work with PGM_1 as it looks like I added 80 to the CC numbers for QLab
+# NOTE had to set the pads for PGM_2 to expected values 60, 62, 64, 65, 67, 69, 71, 72
+LPD8_PROGRAM = Programs.PGM_2
 
 
 class Warp(IntEnum):
@@ -231,6 +238,18 @@ def get_warp(warp_num, display_resolution):
             raise GameException(f"load_warp {warp_num} not implemented")
 
 
+def lpd8_knob(data):
+    _, knob, value = data
+    print(knob, value)
+
+
+def lpd8_pad(data):
+    _, pad, on = data
+    pad = Pads._pad_index[pad]
+    on = on == 1
+    print(pad, on)
+
+
 def run():
     # args
     parser = argparse.ArgumentParser(
@@ -239,6 +258,15 @@ def run():
     )
     parser.add_argument("-f", "--fullscreen", action="store_true")
     args = parser.parse_args()
+
+    # get the LPD8 device
+    lpd8 = LPD8()
+    lpd8.start()
+    lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
+    lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
+    lpd8.subscribe(lpd8_knob, LPD8_PROGRAM, LPD8.CTRL, Knobs.ALL_KNOBS)
+    lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_ON, Pads.ALL_PADS)
+    lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_OFF, Pads.ALL_PADS)
 
     # initialise the display
     pygame.init()
@@ -353,6 +381,8 @@ def run():
 
             pygame.display.flip()
 
+            lpd8.pad_update()
+
             clock.tick(FPS_TARGET)
 
     except (QuitException, KeyboardInterrupt):
@@ -360,6 +390,7 @@ def run():
 
     finally:
         pygame.quit()
+        lpd8.stop()
 
 
 if __name__ == "__main__":
