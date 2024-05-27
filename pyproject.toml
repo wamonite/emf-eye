@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "emf-2024-eye"
+name = "emf_2024_eye"
 version = "0.1.0"
 description = ""
 authors = ["Warren Moore <warren@wamo.uk>"]
@@ -17,6 +17,9 @@ lpd8 = "^1.1.1"
 flake8 = "^7.0.0"
 flake8-commas = "^4.0.0"
 black = "^24.4.2"
+
+[tool.poetry.scripts]
+emf-2024-eye = "emf_2024_eye.main:run"
 
 [build-system]
 requires = ["poetry-core"]

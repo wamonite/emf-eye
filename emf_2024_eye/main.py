@@ -7,7 +7,7 @@ import pygame
 from OpenGL import GL
 import numpy as np
 from enum import IntEnum
-from controller import Controller
+from .controller import Controller
 from math import sin, cos, pi
 import logging
 
@@ -23,8 +23,7 @@ FPS_TARGET = 60
 POINT_OFFSET = 0.002
 LINE_WIDTH_NORMAL = 2
 LINE_WIDTH_SELECTED = 8
-SPHERE_STEPS = 25
-CUSTOM_STEPS = 20
+WARP_PARAMETER_STEPS = 20
 Y_FAN_SCALE = 3
 KNOB_X_POS = 0
 KNOB_X_FAN = 1
@@ -188,11 +187,11 @@ def get_warp(warp_num, display_resolution, controller):
 
         case Warp.PARAMETER:
             coord_array = []
-            for y in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
+            for y in [v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)]:
                 y_scale = sin_curve(y, KNOB_X_FAN, True)
 
                 row = []
-                for x in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
+                for x in [v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)]:
                     x_pos = cos_curve(x, KNOB_X_POS, True)
                     x_pos -= 0.5
                     x_pos *= y_scale
@@ -344,7 +343,3 @@ def run():
     finally:
         pygame.quit()
         controller.stop()
-
-
-if __name__ == "__main__":
-    run()
