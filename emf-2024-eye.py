@@ -78,6 +78,7 @@ def render_texture(
     coord_array,
     offset_coord,
     show_points,
+    invert_x=False,
     mouse_pos=None,
 ):
     GL.glEnable(GL.GL_TEXTURE_2D)
@@ -99,6 +100,8 @@ def render_texture(
 
         for s_x_idx in range(d_x_size):
             s_x_pos = s_x_idx / (d_x_size - 1)
+            if invert_x:
+                s_x_pos = 1.0 - s_x_pos
             s_x_pos += offset_coord[0]
 
             d_pos_0 = coord_array[s_y_idx, s_x_idx]
@@ -191,6 +194,7 @@ def run():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("-f", "--fullscreen", action="store_true")
+    parser.add_argument("-i", "--invert", action="store_true")
     args = parser.parse_args()
 
     # initialise controller
@@ -268,8 +272,8 @@ def run():
                 if mx is not None:
                     dmx = (nmx - mx) / display_resolution[0]
                     dmy = (nmy - my) / display_resolution[1]
-                    tx_x += dmx
-                    tx_y -= dmy
+                    tx_x -= dmx
+                    tx_y += dmy
 
                 mx, my = nmx, nmy
 
@@ -281,6 +285,7 @@ def run():
                 coord_array,
                 (tx_x, tx_y),
                 show_points,
+                args.invert,
             )
 
             pygame.display.flip()
