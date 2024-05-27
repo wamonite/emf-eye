@@ -7,12 +7,7 @@ import pygame
 from OpenGL import GL
 import numpy as np
 from enum import IntEnum
-from math import sin, cos, pi
-import json
-from lpd8.lpd8 import LPD8
-from lpd8.programs import Programs
-from lpd8.pads import Pad, Pads
-from lpd8.knobs import Knobs
+from controller import Controller
 import logging
 
 
@@ -29,14 +24,11 @@ LINE_WIDTH_NORMAL = 2
 LINE_WIDTH_SELECTED = 8
 SPHERE_STEPS = 25
 CUSTOM_STEPS = 20
-# NOTE doesn't work with PGM_1 as it looks like I added 80 to the CC numbers for QLab
-# NOTE had to set the pads for PGM_2 to expected values 60, 62, 64, 65, 67, 69, 71, 72
-LPD8_PROGRAM = Programs.PGM_2
 
 
 class Warp(IntEnum):
+    PARAMETER = 2
     NONE = 1
-    SPHERE = 2
 
 
 class QuitException(Exception):
@@ -86,10 +78,11 @@ def render_texture(
     coord_array,
     offset_coord,
     show_points,
-    mouse_pos = None,
+    mouse_pos=None,
 ):
     GL.glEnable(GL.GL_TEXTURE_2D)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
+    GL.glColor3f(1.0, 1.0, 1.0)
 
     d_y_size, d_x_size, _ = coord_array.shape
 
@@ -156,19 +149,7 @@ def render_texture(
             GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] - point_offset_y)
             GL.glEnd()
 
-        GL.glColor3f(1.0, 1.0, 1.0)
-
     return selected
-
-
-def sphere_x(v):
-    t = v * pi
-    return (1.0 - cos(t)) / 2.0
-
-
-def sphere_y(v):
-    t = v * pi
-    return sin(t)
 
 
 def get_warp(warp_num, display_resolution):
@@ -184,14 +165,13 @@ def get_warp(warp_num, display_resolution):
                 np.float32,
             )
 
-        case Warp.SPHERE:
+        case Warp.PARAMETER:
             coord_array = []
             for y in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
                 row = []
-                y_scale = sphere_y(y)
-                for x in [sphere_x(v / SPHERE_STEPS) for v in range(SPHERE_STEPS + 1)]:
+                for x in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
                     row.append(
-                        [(((x - 0.5) * y_scale) / display_aspect) + 0.5, sphere_x(y)],
+                        [(((x - 0.5)) / display_aspect) + 0.5, y],
                     )
                 coord_array.append(row)
 
@@ -204,18 +184,6 @@ def get_warp(warp_num, display_resolution):
             raise GameException(f"load_warp {warp_num} not implemented")
 
 
-def lpd8_knob(data):
-    _, knob, value = data
-    print(knob, value)
-
-
-def lpd8_pad(data):
-    _, pad, on = data
-    pad = Pads._pad_index[pad]
-    on = on == 1
-    print(pad, on)
-
-
 def run():
     # args
     parser = argparse.ArgumentParser(
@@ -225,14 +193,8 @@ def run():
     parser.add_argument("-f", "--fullscreen", action="store_true")
     args = parser.parse_args()
 
-    # get the LPD8 device
-    lpd8 = LPD8()
-    lpd8.start()
-    lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
-    lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
-    lpd8.subscribe(lpd8_knob, LPD8_PROGRAM, LPD8.CTRL, Knobs.ALL_KNOBS)
-    lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_ON, Pads.ALL_PADS)
-    lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_OFF, Pads.ALL_PADS)
+    # initialise controller
+    controller = Controller()
 
     # initialise the display
     pygame.init()
@@ -264,16 +226,12 @@ def run():
     warp_num = next(iter(Warp))
     coord_array = None
     mouse_move = False
-    point_move = False
-    selected_point = None
-    edit_point = None
 
     pygame.mouse.set_visible(show_points)
 
     try:
         while True:
             nmx, nmy = pygame.mouse.get_pos()
-            ntx, nty = nmx / display_resolution[0], 1.0 - (nmy / display_resolution[1])
 
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
@@ -304,9 +262,6 @@ def run():
             if coord_array is None:
                 coord_array = get_warp(warp_num, display_resolution)
 
-            if point_move:
-                coord_array[edit_point[1]][edit_point[0]] = [ntx, nty]
-
             # get texture offset from mouse move
             dmx, dmy = 0.0, 0.0
             if mouse_move and (mx != nmx or my != nmy):
@@ -320,7 +275,7 @@ def run():
 
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
-            selected_point = render_texture(
+            render_texture(
                 tx_ref,
                 display_resolution,
                 coord_array,
@@ -330,7 +285,7 @@ def run():
 
             pygame.display.flip()
 
-            lpd8.pad_update()
+            controller.update()
 
             clock.tick(FPS_TARGET)
 
@@ -339,7 +294,7 @@ def run():
 
     finally:
         pygame.quit()
-        lpd8.stop()
+        controller.stop()
 
 
 if __name__ == "__main__":
