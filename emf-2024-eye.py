@@ -155,8 +155,9 @@ def render_texture(
     return selected
 
 
-def get_warp(warp_num, display_resolution):
+def get_warp(warp_num, display_resolution, controller):
     display_aspect = display_resolution[0] / display_resolution[1]
+    display_scale = ((display_aspect - 1.0) * controller.knobs[0]) + 1.0
 
     match warp_num:
         case Warp.NONE:
@@ -174,7 +175,7 @@ def get_warp(warp_num, display_resolution):
                 row = []
                 for x in [v / SPHERE_STEPS for v in range(SPHERE_STEPS + 1)]:
                     row.append(
-                        [(((x - 0.5)) / display_aspect) + 0.5, y],
+                        [(((x - 0.5)) / display_scale) + 0.5, y],
                     )
                 coord_array.append(row)
 
@@ -260,11 +261,20 @@ def run():
                         if not mouse_move:
                             tx_x, tx_y = 0.0, 0.0
 
+                    if event.key == pygame.K_r:
+                        controller.load_defaults()
+
+                    if event.key == pygame.K_s:
+                        controller.save_defaults()
+
                 elif event.type == pygame.QUIT:
                     raise QuitException()
 
+            if controller.updated:
+                coord_array = None
+
             if coord_array is None:
-                coord_array = get_warp(warp_num, display_resolution)
+                coord_array = get_warp(warp_num, display_resolution, controller)
 
             # get texture offset from mouse move
             dmx, dmy = 0.0, 0.0
