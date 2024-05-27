@@ -295,7 +295,7 @@ def run():
                         if not mouse_move:
                             tx_x, tx_y = 0.0, 0.0
 
-                    if event.key == pygame.K_r:
+                    if event.key == pygame.K_l:
                         controller.load_defaults()
 
                     if event.key == pygame.K_s:
