@@ -33,7 +33,6 @@ LPD8_PROGRAM = Programs.PGM_2
 
 
 class Warp(IntEnum):
-    CUSTOM = 0
     NONE = 1
     SPHERE = 2
 
@@ -85,7 +84,7 @@ def render_texture(
     coord_array,
     offset_coord,
     show_points,
-    mouse_pos,
+    mouse_pos = None,
 ):
     GL.glEnable(GL.GL_TEXTURE_2D)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
@@ -166,42 +165,6 @@ def sphere_y(v):
     return sin(t)
 
 
-def load_warp():
-    try:
-        with open("warp.json") as file_object:
-            data = json.load(file_object)
-            return np.array(
-                data["coord_array"],
-                np.float32,
-            )
-
-    except FileNotFoundError:
-        pass
-
-    coord_array = []
-    for y in [v / CUSTOM_STEPS for v in range(CUSTOM_STEPS + 1)]:
-        row = []
-        for x in [v / CUSTOM_STEPS for v in range(CUSTOM_STEPS + 1)]:
-            row.append([x, y])
-        coord_array.append(row)
-
-    return np.array(
-        coord_array,
-        np.float32,
-    )
-
-
-def save_warp(coord_array):
-    data = {"coord_array": coord_array.tolist()}
-
-    try:
-        with open("warp.json", "w") as file_object:
-            return json.dump(data, file_object)
-
-    except Exception as e:
-        log.error("%s: %s", e.__class__.__name__, e)
-
-
 def get_warp(warp_num, display_resolution):
     display_aspect = display_resolution[0] / display_resolution[1]
 
@@ -230,9 +193,6 @@ def get_warp(warp_num, display_resolution):
                 coord_array,
                 np.float32,
             )
-
-        case Warp.CUSTOM:
-            return load_warp()
 
         case _:
             raise GameException(f"load_warp {warp_num} not implemented")
@@ -316,7 +276,6 @@ def run():
 
                     if event.key == pygame.K_p:
                         show_points = not show_points
-                        pygame.mouse.set_visible(show_points)
 
                     if event.key == pygame.K_w:
                         warp_num += 1
@@ -332,17 +291,6 @@ def run():
                         # reset texture offset
                         if not mouse_move:
                             tx_x, tx_y = 0.0, 0.0
-
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1 and warp_num == Warp.CUSTOM and selected_point:
-                        point_move = True
-                        edit_point = selected_point[1]
-
-                if event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1 and warp_num == Warp.CUSTOM:
-                        point_move = False
-                        edit_point = None
-                        save_warp(coord_array)
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
@@ -372,11 +320,6 @@ def run():
                 coord_array,
                 (tx_x, tx_y),
                 show_points,
-                (
-                    (ntx, nty)
-                    if warp_num == Warp.CUSTOM
-                    else None
-                ),
             )
 
             pygame.display.flip()
