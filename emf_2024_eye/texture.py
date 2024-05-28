@@ -2,7 +2,7 @@ from pathlib import Path
 from OpenGL import GL
 import cv2
 from .exceptions import ScriptException
-from typing import Optional
+from typing import Optional, Self
 import pygame
 import logging
 
@@ -13,7 +13,7 @@ log = logging.getLogger("texture")
 
 class Texture:
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self: Self, path: Path) -> None:
         self._path = path
 
         self._video = None
@@ -23,10 +23,10 @@ class Texture:
         self._tx_ref = GL.glGenTextures(1)
 
     @property
-    def fps(self) -> Optional[float]:
+    def fps(self: Self) -> Optional[float]:
         return self._fps
 
-    def _reset_video(self) -> None:
+    def _reset_video(self: Self) -> None:
         if self._video:
             self._video.release()
 
@@ -35,7 +35,7 @@ class Texture:
 
         self._video = cv2.VideoCapture(str(self._path))
 
-    def update(self) -> Optional[int]:
+    def update(self: Self) -> Optional[int]:
         if not self._tx_ref:
             return None
 
@@ -79,7 +79,7 @@ class Texture:
 
         return self._tx_ref
 
-    def release(self) -> None:
+    def release(self: Self) -> None:
         if self._tx_ref:
             GL.glDeleteTextures([self._tx_ref])
         self._tx_ref = None

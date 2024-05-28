@@ -22,7 +22,7 @@ RESOLUTION_TARGET = (1920, 1080)
 FPS_DEFAULT = 25
 
 
-def run():
+def run() -> None:
     # args
     parser = argparse.ArgumentParser(
         description=__doc__,
