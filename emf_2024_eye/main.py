@@ -65,8 +65,6 @@ def run():
     scene = scenes[scene_idx]
     scene.start()
 
-    mx, my = None, None
-    tx_x, tx_y = 0.0, 0.0
     show_points = False
     warp_num = next(iter(Warp))
     coord_array = None
@@ -74,8 +72,6 @@ def run():
 
     try:
         while True:
-            nmx, nmy = pygame.mouse.get_pos()
-
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
@@ -95,10 +91,6 @@ def run():
                     if event.key == pygame.K_m:
                         mouse_move = not mouse_move
 
-                        # reset texture offset
-                        if not mouse_move:
-                            tx_x, tx_y = 0.0, 0.0
-
                     if event.key == pygame.K_l:
                         controller.load_defaults()
 
@@ -114,18 +106,17 @@ def run():
             if coord_array is None:
                 coord_array = calculate_warp(warp_num, display_resolution, controller)
 
-            # get texture offset from mouse move
-            dmx, dmy = 0.0, 0.0
-            if mouse_move and (mx != nmx or my != nmy):
-                if mx is not None:
-                    dmx = (nmx - mx) / display_resolution[0]
-                    dmy = (nmy - my) / display_resolution[1]
-                    tx_x -= dmx
-                    tx_y += dmy
-
-                mx, my = nmx, nmy
-
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+
+            # get texture offset from mouse move
+            if mouse_move:
+                mx, my = pygame.mouse.get_pos()
+
+                tx_x = 0.5 - (mx / display_resolution[0])
+                tx_y = 0.5 + (my / display_resolution[1])
+
+            else:
+                tx_x, tx_y = 0.0, 0.0
 
             tx_ref = scene.update_texture()
 
