@@ -9,6 +9,8 @@ import numpy as np
 from enum import IntEnum
 from .controller import Controller
 from math import sin, cos, pi
+from .scene import Scene
+from .exceptions import QuitException, ScriptException
 import logging
 
 
@@ -19,7 +21,7 @@ log.addHandler(log_handler)
 
 
 RESOLUTION_TARGET = (1920, 1080)
-FPS_TARGET = 60
+FPS_DEFAULT = 25
 POINT_OFFSET = 0.002
 LINE_WIDTH_NORMAL = 2
 LINE_WIDTH_SELECTED = 8
@@ -35,47 +37,6 @@ KNOB_Y_FAN = 5
 class Warp(IntEnum):
     PARAMETER = 0
     NONE = 1
-
-
-class QuitException(Exception):
-    pass
-
-
-class GameException(Exception):
-    pass
-
-
-def load_texture(file_name):
-    tx_ref = GL.glGenTextures(1)
-    tx_surface = pygame.image.load(file_name)
-
-    tx_w = tx_surface.get_width()
-    tx_h = tx_surface.get_height()
-    tx_data = pygame.image.tostring(tx_surface, "RGB", True)
-    GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
-    GL.glTexImage2D(
-        GL.GL_TEXTURE_2D,
-        0,
-        GL.GL_RGB,
-        tx_w,
-        tx_h,
-        0,
-        GL.GL_RGB,
-        GL.GL_UNSIGNED_BYTE,
-        tx_data,
-    )
-    GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
-    GL.glTexParameteri(
-        GL.GL_TEXTURE_2D,
-        GL.GL_TEXTURE_MIN_FILTER,
-        GL.GL_LINEAR_MIPMAP_LINEAR,
-    )
-    # GL_REPEAT is going to make life a lot easier
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_REPEAT)
-
-    return tx_ref
 
 
 def render_texture(
@@ -187,11 +148,15 @@ def get_warp(warp_num, display_resolution, controller):
 
         case Warp.PARAMETER:
             coord_array = []
-            for y in [v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)]:
+            for y in [
+                v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)
+            ]:
                 y_scale = sin_curve(y, KNOB_X_FAN, True)
 
                 row = []
-                for x in [v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)]:
+                for x in [
+                    v / WARP_PARAMETER_STEPS for v in range(WARP_PARAMETER_STEPS + 1)
+                ]:
                     x_pos = cos_curve(x, KNOB_X_POS, True)
                     x_pos -= 0.5
                     x_pos *= y_scale
@@ -218,7 +183,7 @@ def get_warp(warp_num, display_resolution, controller):
             )
 
         case _:
-            raise GameException(f"load_warp {warp_num} not implemented")
+            raise ScriptException(f"load_warp {warp_num} not implemented")
 
 
 def run():
@@ -256,7 +221,11 @@ def run():
     GL.glMatrixMode(GL.GL_MODELVIEW)
     GL.glLoadIdentity()
 
-    tx_ref = load_texture("test_card.jpg")
+    # initliase scenes
+    scenes = Scene.load_scenes()
+    scene_idx = 0
+    scene = scenes[scene_idx]
+    scene.start()
 
     mx, my = None, None
     tx_x, tx_y = 0.0, 0.0
@@ -322,6 +291,8 @@ def run():
 
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
+            tx_ref = scene.update_texture()
+
             render_texture(
                 tx_ref,
                 display_resolution,
@@ -335,11 +306,12 @@ def run():
 
             controller.update()
 
-            clock.tick(FPS_TARGET)
+            clock.tick(scene.fps or FPS_DEFAULT)
 
     except (QuitException, KeyboardInterrupt):
         pass
 
     finally:
+        scene.stop()
         pygame.quit()
         controller.stop()

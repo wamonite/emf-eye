@@ -1,7 +1,7 @@
 # EMF 2024 Eye
 
 ```
-usage: emf-2024-eye.py [-h] [-f] [-i]
+usage: emf-2024-eye [-h] [-f] [-i]
 
 EMF 2024 eye renderer
 

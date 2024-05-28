@@ -12,11 +12,13 @@ pyopengl = "^3.1.7"
 pyopengl-accelerate = "^3.1.7"
 numpy = "^1.26.4"
 lpd8 = "^1.1.1"
+opencv-python = "^4.9.0.80"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^7.0.0"
 flake8-commas = "^4.0.0"
 black = "^24.4.2"
+flake8-annotations = "^3.1.1"
 
 [tool.poetry.scripts]
 emf-2024-eye = "emf_2024_eye.main:run"
