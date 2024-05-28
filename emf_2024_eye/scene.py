@@ -6,7 +6,7 @@ import logging
 
 
 log = logging.getLogger("scene")
-# log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 
 PATH_DEFAULT = "scenes"
@@ -34,6 +34,9 @@ class Scene:
                         log.error("file not found %s", file_path)
                         raise FileNotFoundError(file_path)
 
+    def __repr__(self: Self) -> str:
+        return f"<scene.Scene {self._path}>"
+
     @property
     def fps(self: Self) -> Optional[float]:
         return self._texture.fps if self._texture else None
@@ -54,13 +57,19 @@ class Scene:
             except FileNotFoundError:
                 log.error("invalid scene %s", scene_path)
 
+        log.debug(scenes)
+
         return scenes
 
     def start(self: Self, name: str = SCENE_DEFAULT) -> None:
+        log.debug("scene start %s %s", self._path, name)
+
         self._name = name
         self._texture = Texture(self._path / self._data[name]["video"])
 
     def stop(self: Self) -> None:
+        log.debug("scene stop %s", self._path)
+
         if self._texture:
             self._texture.release()
             self._texture = None

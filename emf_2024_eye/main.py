@@ -97,6 +97,24 @@ def run() -> None:
                     if event.key == pygame.K_s:
                         controller.save_defaults()
 
+                    if event.key == pygame.K_RIGHT:
+                        scene_idx += 1
+                        if scene_idx == len(scenes):
+                            scene_idx = 0
+
+                        scene.stop()
+                        scene = scenes[scene_idx]
+                        scene.start()
+
+                    if event.key == pygame.K_LEFT:
+                        scene_idx -= 1
+                        if scene_idx < 0:
+                            scene_idx = len(scenes) - 1
+
+                        scene.stop()
+                        scene = scenes[scene_idx]
+                        scene.start()
+
                 elif event.type == pygame.QUIT:
                     raise QuitException()
 
