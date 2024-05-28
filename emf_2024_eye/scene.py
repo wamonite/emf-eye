@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from typing import Optional
+from typing import Optional, Self
 from .texture import Texture
 import logging
 
@@ -15,34 +15,52 @@ SCENE_DEFAULT = "default"
 
 class Scene:
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self: Self, path: Path) -> None:
         self._path = path
         self._texture = None
         self._name = None
 
         with open(path / "scene.json") as file_object:
             self._data = json.load(file_object)
-            print(path, self._data)
+
+        self.validate()
+
+    def validate(self: Self) -> None:
+        for name, data in self._data.items():
+            for file_key in ["video"]:
+                if file_key in data:
+                    file_path = self._path / data[file_key]
+                    if not file_path.exists():
+                        log.error("file not found %s", file_path)
+                        raise FileNotFoundError(file_path)
 
     @property
-    def fps(self) -> Optional[float]:
+    def fps(self: Self) -> Optional[float]:
         return self._texture.fps if self._texture else None
 
-    def update_texture(self) -> Optional[int]:
+    def update_texture(self: Self) -> Optional[int]:
         return self._texture.update()
 
     @staticmethod
-    def load_scenes(path: Optional[Path] = None):
+    def load_scenes(path: Optional[Path] = None) -> list[Self]:
         if path is None:
             path = Path(PATH_DEFAULT)
 
-        return [Scene(d) for d in path.iterdir() if d.is_dir()]
+        scenes = []
+        for scene_path in sorted([d for d in path.iterdir() if d.is_dir()]):
+            try:
+                scenes.append(Scene(scene_path))
 
-    def start(self, name: str = SCENE_DEFAULT) -> None:
+            except FileNotFoundError:
+                log.error("invalid scene %s", scene_path)
+
+        return scenes
+
+    def start(self: Self, name: str = SCENE_DEFAULT) -> None:
         self._name = name
         self._texture = Texture(self._path / self._data[name]["video"])
 
-    def stop(self) -> None:
+    def stop(self: Self) -> None:
         if self._texture:
             self._texture.release()
             self._texture = None
