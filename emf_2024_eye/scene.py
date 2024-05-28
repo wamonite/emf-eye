@@ -2,6 +2,11 @@ from pathlib import Path
 import json
 from typing import Optional
 from .texture import Texture
+import logging
+
+
+log = logging.getLogger("scene")
+# log.setLevel(logging.DEBUG)
 
 
 PATH_DEFAULT = "scenes"

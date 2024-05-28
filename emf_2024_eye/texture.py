@@ -4,6 +4,11 @@ import cv2
 from .exceptions import ScriptException
 from typing import Optional
 import pygame
+import logging
+
+
+log = logging.getLogger("texture")
+# log.setLevel(logging.DEBUG)
 
 
 class Texture:
