@@ -145,7 +145,7 @@ def run() -> None:
 
                 # print the values that can be used for move steps
                 if ntx_x != tx_x or ntx_y != tx_y:
-                    print(f"[{tx_x}, {tx_y}, {tx_time_now - tx_time}],")
+                    print(f"[{tx_x:.5f}, {tx_y:.5f}, {tx_time_now - tx_time:.3f}],")
                     tx_x, tx_y = ntx_x, ntx_y
 
                 tx_time = tx_time_now
