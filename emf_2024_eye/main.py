@@ -63,7 +63,8 @@ def run() -> None:
     scenes = Scene.load_scenes()
     scene_idx = 0
     scene = scenes[scene_idx]
-    scene.start()
+    tx_x, tx_y = 0.0, 0.0
+    scene.start(tx_x, tx_y)
 
     show_points = False
     warp_num = next(iter(Warp))
@@ -104,7 +105,7 @@ def run() -> None:
 
                         scene.stop()
                         scene = scenes[scene_idx]
-                        scene.start()
+                        scene.start(tx_x, tx_y)
 
                     if event.key == pygame.K_LEFT:
                         scene_idx -= 1
@@ -113,7 +114,7 @@ def run() -> None:
 
                         scene.stop()
                         scene = scenes[scene_idx]
-                        scene.start()
+                        scene.start(tx_x, tx_y)
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
@@ -134,7 +135,7 @@ def run() -> None:
                 tx_y = 0.5 + (my / display_resolution[1])
 
             else:
-                tx_x, tx_y = 0.0, 0.0
+                tx_x, tx_y = scene.update_position()
 
             tx_ref = scene.update_texture()
 
