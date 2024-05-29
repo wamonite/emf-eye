@@ -143,6 +143,8 @@ def run() -> None:
                         scene = scenes[scene_idx]
                         scene.start()
 
+                        showreel_time = timer()
+
                     if event.key == pygame.K_LEFT:
                         scene_idx -= 1
                         if scene_idx < 0:
@@ -151,6 +153,8 @@ def run() -> None:
                         scene.stop()
                         scene = scenes[scene_idx]
                         scene.start()
+
+                        showreel_time = timer()
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
