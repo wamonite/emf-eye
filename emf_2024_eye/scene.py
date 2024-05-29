@@ -84,7 +84,7 @@ class Scene:
             path = Path(PATH_DEFAULT)
 
         scenes = []
-        for scene_path in sorted([d for d in path.iterdir() if d.is_dir()]):
+        for scene_path in sorted([d for d in path.iterdir() if d.is_dir() and not str(d).endswith(".disabled")]):
             try:
                 scenes.append(Scene(scene_path))
 
