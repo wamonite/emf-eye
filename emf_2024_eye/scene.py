@@ -12,7 +12,6 @@ log = logging.getLogger("scene")
 
 PATH_DEFAULT = "scenes"
 SCENE_DEFAULT = "default"
-MOVE_START_DURATION_DEFAULT = 0.5
 
 
 class Scene:
@@ -65,22 +64,17 @@ class Scene:
         move_ratio = move_now / self._move_end_time
         if move_ratio > 1.0:
             move_ratio = 1.0
+            tx_x = self._move_end_x
+            tx_y = self._move_end_y
+            self._next_move()
 
-        tx_x = (
-            (self._move_end_x - self._move_start_x) * move_ratio
-        ) + self._move_start_x
-        tx_y = (
-            (self._move_end_y - self._move_start_y) * move_ratio
-        ) + self._move_start_y
-
-        if move_ratio == 1.0:
-            move_idx = self._move_idx + 1
-            if move_idx == len(self._moves):
-                move_idx = 0
-
-            self._move_start_x = tx_x
-            self._move_start_y = tx_y
-            self._set_move(move_idx)
+        else:
+            tx_x = (
+                (self._move_end_x - self._move_start_x) * move_ratio
+            ) + self._move_start_x
+            tx_y = (
+                (self._move_end_y - self._move_start_y) * move_ratio
+            ) + self._move_start_y
 
         return tx_x, tx_y
 
@@ -101,26 +95,28 @@ class Scene:
 
         return scenes
 
+    def _next_move(self: Self) -> None:
+        self._move_start_x = self._move_end_x
+        self._move_start_y = self._move_end_y
+
+        move_idx = self._move_idx + 1
+        if move_idx == len(self._moves):
+            move_idx = 0
+
+        self._set_move(move_idx)
+
     def _set_move(self: Self, idx: int, on_start: bool = False) -> None:
-        self._moves = self._data[self._name]["moves"]
         self._move_idx = idx
         self._move_start_time = timer()
         self._move_end_x = self._moves[self._move_idx][0]
         self._move_end_y = self._moves[self._move_idx][1]
-        if not on_start:
-            self._move_end_time = self._moves[self._move_idx][2]
+        self._move_end_time = self._moves[self._move_idx][2]
 
-        else:
-            self._move_end_time = (
-                self._data[self._name]["move_start_duration"]
-                if "move_start_duration" in self._data[self._name]
-                else MOVE_START_DURATION_DEFAULT
-            )
+        if on_start:
+            self._next_move()
 
     def start(
         self: Self,
-        start_x: float,
-        start_y: float,
         name: str = SCENE_DEFAULT,
     ) -> None:
         log.debug("scene start %s %s", self._path, name)
@@ -132,8 +128,7 @@ class Scene:
 
         self._moves = None
         if "moves" in self._data[name]:
-            self._move_start_x = start_x
-            self._move_start_y = start_y
+            self._moves = self._data[self._name]["moves"]
             self._set_move(0, on_start=True)
 
     def stop(self: Self) -> None:

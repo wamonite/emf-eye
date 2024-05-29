@@ -9,6 +9,7 @@ from .controller import Controller
 from .scene import Scene
 from .exceptions import QuitException
 from .warp import Warp, calculate_warp, render_warp
+from timeit import default_timer as timer
 import logging
 
 
@@ -46,8 +47,6 @@ def run() -> None:
     if args.fullscreen:
         display_resolution = display.get_size()
 
-    pygame.mouse.set_visible(False)
-
     clock = pygame.time.Clock()
 
     # orthographic projection - (0, 0) bottom left, (1, 1) top right
@@ -63,13 +62,17 @@ def run() -> None:
     scenes = Scene.load_scenes()
     scene_idx = 0
     scene = scenes[scene_idx]
-    tx_x, tx_y = 0.0, 0.0
-    scene.start(tx_x, tx_y)
+    scene.start()
 
     show_points = False
     warp_num = next(iter(Warp))
     coord_array = None
     mouse_move = False
+    mouse_hide = True
+    tx_x, tx_y = 0.0, 0.0
+    tx_time = timer()
+
+    pygame.mouse.set_visible(not mouse_hide)
 
     try:
         while True:
@@ -92,6 +95,10 @@ def run() -> None:
                     if event.key == pygame.K_m:
                         mouse_move = not mouse_move
 
+                    if event.key == pygame.K_h:
+                        mouse_hide = not mouse_hide
+                        pygame.mouse.set_visible(not mouse_hide)
+
                     if event.key == pygame.K_l:
                         controller.load_defaults()
 
@@ -105,7 +112,7 @@ def run() -> None:
 
                         scene.stop()
                         scene = scenes[scene_idx]
-                        scene.start(tx_x, tx_y)
+                        scene.start()
 
                     if event.key == pygame.K_LEFT:
                         scene_idx -= 1
@@ -114,7 +121,7 @@ def run() -> None:
 
                         scene.stop()
                         scene = scenes[scene_idx]
-                        scene.start(tx_x, tx_y)
+                        scene.start()
 
                 elif event.type == pygame.QUIT:
                     raise QuitException()
@@ -131,8 +138,17 @@ def run() -> None:
             if mouse_move:
                 mx, my = pygame.mouse.get_pos()
 
-                tx_x = 0.5 - (mx / display_resolution[0])
-                tx_y = 0.5 + (my / display_resolution[1])
+                ntx_x = 0.5 - (mx / display_resolution[0])
+                ntx_y = (my / display_resolution[1]) - 0.5
+
+                tx_time_now = timer()
+
+                # print the values that can be used for move steps
+                if ntx_x != tx_x or ntx_y != tx_y:
+                    print(f"[{tx_x}, {tx_y}, {tx_time_now - tx_time}],")
+                    tx_x, tx_y = ntx_x, ntx_y
+
+                tx_time = tx_time_now
 
             else:
                 tx_x, tx_y = scene.update_position()
