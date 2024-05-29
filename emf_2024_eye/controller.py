@@ -3,6 +3,7 @@ from lpd8.programs import Programs
 from lpd8.pads import Pad, Pads
 from lpd8.knobs import Knobs
 import json
+from typing import Self
 import logging
 
 
@@ -17,7 +18,8 @@ DEFAULTS_FILE_NAME = "controller.json"
 
 
 class Controller:
-    def __init__(self, sticky=True):
+
+    def __init__(self: Self, sticky: bool = True) -> None:
         self.sticky = sticky
 
         # get the LPD8 device
@@ -32,13 +34,13 @@ class Controller:
 
         self.load_defaults()
 
-        def lpd8_knob(data):
+        def lpd8_knob(data: tuple[int, int, float]) -> None:
             _, knob, value = data
             self.knob_values[knob - 1] = value
             self.update_flag = True
             log.debug("knob: %s = %s", knob, value)
 
-        def lpd8_pad(data):
+        def lpd8_pad(data: tuple[int, int, float]) -> None:
             _, pad, on = data
             pad = Pads._pad_index[pad]
             on = on == 1
@@ -51,26 +53,32 @@ class Controller:
         self.lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_OFF, Pads.ALL_PADS)
 
     @property
-    def updated(self):
+    def updated(self: Self) -> bool:
         if self.update_flag:
             self.update_flag = False
             return True
 
         return False
 
-    def interpolate(self, v1, v2, knob_index, invert=False):
+    def interpolate(
+        self: Self,
+        v1: float,
+        v2: float,
+        knob_index: int,
+        invert: bool = False,
+    ) -> float:
         i = self.knob_values[knob_index]
         if invert:
             i = 1.0 - i
         return ((v2 - v1) * i) + v1
 
-    def update(self):
+    def update(self: Self) -> None:
         self.lpd8.pad_update()
 
-    def stop(self):
+    def stop(self: Self) -> None:
         self.lpd8.stop()
 
-    def load_defaults(self):
+    def load_defaults(self: Self) -> None:
         self.knob_values = [0] * Pads.PAD_MAX
 
         try:
@@ -87,7 +95,7 @@ class Controller:
 
         self.update_flag = True
 
-    def save_defaults(self):
+    def save_defaults(self: Self) -> dict:
         data = {"knobs": self.knob_values}
 
         try:
