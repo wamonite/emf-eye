@@ -3,6 +3,8 @@ from enum import IntEnum
 from OpenGL import GL
 from math import sin, cos, pi
 from .exceptions import ScriptException
+from .controller import Controller
+from typing import Optional
 import logging
 
 
@@ -27,16 +29,20 @@ class Warp(IntEnum):
     NONE = 1
 
 
-def calculate_warp(warp_num, display_resolution, controller):
+def calculate_warp(
+    warp_num: Warp,
+    display_resolution: tuple[int, int],
+    controller: Controller,
+) -> np.ndarray:
     display_aspect = display_resolution[0] / display_resolution[1]
     display_scale = controller.interpolate(display_aspect, 1.0, KNOB_ASPECT, True)
 
-    def cos_curve(v, knob_index, invert):
+    def cos_curve(v: float, knob_index: int, invert: bool) -> float:
         t = v * pi
         c = (1.0 - cos(t)) / 2.0
         return controller.interpolate(c, v, knob_index, invert)
 
-    def sin_curve(v, knob_index, invert):
+    def sin_curve(v: float, knob_index: int, invert: bool) -> float:
         t = v * pi
         c = sin(t)
         return controller.interpolate(c, 1.0, knob_index, invert)
@@ -92,14 +98,14 @@ def calculate_warp(warp_num, display_resolution, controller):
 
 
 def render_warp(
-    tx_ref,
-    display_resolution,
-    coord_array,
-    offset_coord,
-    show_points,
-    invert_x=False,
-    mouse_pos=None,
-):
+    tx_ref: int,
+    display_resolution: tuple[int, int],
+    coord_array: np.ndarray,
+    offset_coord: tuple[float, float],
+    show_points: bool,
+    invert_x: bool = False,
+    mouse_pos: Optional[tuple[float, float]] = None,
+) -> None:
     GL.glEnable(GL.GL_TEXTURE_2D)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
     GL.glColor3f(1.0, 1.0, 1.0)

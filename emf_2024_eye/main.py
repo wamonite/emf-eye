@@ -31,10 +31,16 @@ def run() -> None:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-f", "--fullscreen", action="store_true", help="use the full screen",
+        "-f",
+        "--fullscreen",
+        action="store_true",
+        help="use the full screen",
     )
     parser.add_argument(
-        "-i", "--invert", action="store_true", help="invert horizontal coordinates",
+        "-i",
+        "--invert",
+        action="store_true",
+        help="invert horizontal coordinates",
     )
     parser.add_argument(
         "-s",
