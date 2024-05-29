@@ -21,6 +21,7 @@ log.addHandler(log_handler)
 
 RESOLUTION_TARGET = (1920, 1080)
 FPS_DEFAULT = 25
+SHOWREEL_TIME = 60 * 5
 
 
 def run() -> None:
@@ -29,8 +30,18 @@ def run() -> None:
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-f", "--fullscreen", action="store_true")
-    parser.add_argument("-i", "--invert", action="store_true")
+    parser.add_argument(
+        "-f", "--fullscreen", action="store_true", help="use the full screen",
+    )
+    parser.add_argument(
+        "-i", "--invert", action="store_true", help="invert horizontal coordinates",
+    )
+    parser.add_argument(
+        "-s",
+        "--showreel",
+        action="store_true",
+        help=f"switch scene every {SHOWREEL_TIME} seconds",
+    )
     args = parser.parse_args()
 
     # initialise controller
@@ -71,12 +82,24 @@ def run() -> None:
     mouse_hide = True
     tx_x, tx_y = 0.0, 0.0
     tx_time = timer()
+    showreel_time = timer()
 
     pygame.mouse.set_visible(not mouse_hide)
 
     try:
         while True:
-            for event in pygame.event.get():
+            events = pygame.event.get()
+
+            if args.showreel:
+                showreel_time_now = timer()
+                if (showreel_time_now - showreel_time) > SHOWREEL_TIME:
+                    events.append(
+                        pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RIGHT}),
+                    )
+
+                    showreel_time = showreel_time_now
+
+            for event in events:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
                         raise QuitException()
