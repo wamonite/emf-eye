@@ -19,6 +19,7 @@ flake8 = "^7.0.0"
 flake8-commas = "^4.0.0"
 black = "^24.4.2"
 flake8-annotations = "^3.1.1"
+pre-commit = "^3.7.1"
 
 [tool.poetry.scripts]
 emf-2024-eye = "emf_2024_eye.main:run"
