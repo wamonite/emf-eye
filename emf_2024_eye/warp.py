@@ -113,6 +113,7 @@ def render_warp(
     d_y_size, d_x_size, _ = coord_array.shape
 
     points = set()
+    points_orig = set()
 
     for s_y_idx in range(d_y_size - 1):
         s_y_pos_0 = s_y_idx / (d_y_size - 1)
@@ -141,6 +142,8 @@ def render_warp(
             points.add(((d_pos_0[0], d_pos_0[1]), (s_x_idx, s_y_idx)))
             points.add(((d_pos_1[0], d_pos_1[1]), (s_x_idx, s_y_idx + 1)))
 
+            points_orig.add(((s_x_pos, s_y_pos_0)))
+
             log.debug("s %s %s", s_x_pos, s_y_pos_0)
             log.debug("s %s %s", s_x_pos, s_y_pos_1)
             log.debug("d %s %s", d_pos_0[0], d_pos_0[1])
@@ -157,7 +160,7 @@ def render_warp(
         point_offset_y = point_offset_x * display_aspect
         for point in points:
             GL.glLineWidth(LINE_WIDTH_NORMAL)
-            GL.glColor3f(1.0, 0.0, 0.0)
+            GL.glColor3f(0.0, 1.0, 0.0)
 
             if (
                 mouse_pos
@@ -175,6 +178,17 @@ def render_warp(
             GL.glVertex2f(point[0][0] - point_offset_x, point[0][1] + point_offset_y)
             GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] + point_offset_y)
             GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] - point_offset_y)
+            GL.glEnd()
+
+        for point in points_orig:
+            GL.glLineWidth(LINE_WIDTH_NORMAL)
+            GL.glColor3f(1.0, 0.0, 0.0)
+
+            GL.glBegin(GL.GL_LINE_LOOP)
+            GL.glVertex2f(point[0] - point_offset_x, point[1] - point_offset_y)
+            GL.glVertex2f(point[0] - point_offset_x, point[1] + point_offset_y)
+            GL.glVertex2f(point[0] + point_offset_x, point[1] + point_offset_y)
+            GL.glVertex2f(point[0] + point_offset_x, point[1] - point_offset_y)
             GL.glEnd()
 
     return selected
