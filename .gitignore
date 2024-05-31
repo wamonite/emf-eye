@@ -1,6 +1,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/macos,direnv,python,pycharm+all
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,direnv,python,pycharm+all
 
+.idea
+
 ### direnv ###
 .direnv
 .envrc
