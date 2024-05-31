@@ -107,7 +107,21 @@ def run() -> None:
 
             pads = controller.pads()
             if pads:
-                print(pads)
+                for pad in pads:
+                    try:
+                        key = [
+                            pygame.K_LEFT,
+                            pygame.K_RIGHT,
+                            pygame.K_p,
+                            pygame.K_w,
+                            pygame.K_m,
+                        ][pad - 1]
+                        events.append(
+                            pygame.event.Event(pygame.KEYDOWN, {"key": key}),
+                        )
+
+                    except IndexError:
+                        pass
 
             for event in events:
                 if event.type == pygame.KEYDOWN:
