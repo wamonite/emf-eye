@@ -19,18 +19,22 @@ DEFAULTS_FILE_NAME = "controller.json"
 
 class Controller:
 
-    def __init__(self: Self, sticky: bool = True) -> None:
-        self.sticky = sticky
+    def __init__(self: Self, sticky: bool = True, pad_on_release: bool = True) -> None:
+        self._sticky = sticky
+        self._pad_on_release = pad_on_release
 
         # get the LPD8 device
         self._lpd8 = LPD8()
         self._lpd8.start()
         self._lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
-        if not self.sticky:
+        if not self._sticky:
             self._lpd8.set_not_sticky_knob(LPD8_PROGRAM, Knobs.ALL_KNOBS)
         self._lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
 
+        self._knobs = [0] * Pads.PAD_MAX
         self._updated = False
+
+        self._pads = []
 
         self.load_defaults()
 
@@ -45,7 +49,9 @@ class Controller:
             pad = Pads._pad_index[pad]
             on = on == 1
             self._updated = True
-            # TODO do something with this
+
+            if self._pad_on_release != on:
+                self._pads.append(pad)
             log.debug("pad: %s = %s", pad, on)
 
         self._lpd8.subscribe(lpd8_knob, LPD8_PROGRAM, LPD8.CTRL, Knobs.ALL_KNOBS)
@@ -72,6 +78,11 @@ class Controller:
             i = 1.0 - i
         return ((v2 - v1) * i) + v1
 
+    def pads(self: Self) -> list[int]:
+        pads = self._pads
+        self._pads = []
+        return pads
+
     def update(self: Self) -> None:
         self._lpd8.pad_update()
 
@@ -79,8 +90,6 @@ class Controller:
         self._lpd8.stop()
 
     def load_defaults(self: Self) -> None:
-        self._knobs = [0] * Pads.PAD_MAX
-
         try:
             with open(DEFAULTS_FILE_NAME) as file_object:
                 data = json.load(file_object)
