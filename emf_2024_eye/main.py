@@ -21,7 +21,7 @@ log.addHandler(log_handler)
 
 RESOLUTION_TARGET = (1920, 1080)
 FPS_DEFAULT = 25
-SHOWREEL_TIME = 60 * 5
+SHOWREEL_TIME = 60 * 1
 
 
 def run() -> None:
@@ -104,6 +104,10 @@ def run() -> None:
                     )
 
                     showreel_time = showreel_time_now
+
+            pads = controller.pads()
+            if pads:
+                print(pads)
 
             for event in events:
                 if event.type == pygame.KEYDOWN:
