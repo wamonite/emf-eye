@@ -1,3 +1,7 @@
+
+# This provides a utility to setup the microphone array, as well as
+# a class for extracting the direction of the sound source.
+#
 # Modules: pyusb
 
 # -*- coding: utf-8 -*-
