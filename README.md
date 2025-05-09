@@ -1,9 +1,9 @@
-# EMF 2024 Eye
+# EMF Eye
 
 ```
-usage: emf-2024-eye [-h] [-f] [-i] [-s]
+usage: emf-eye [-h] [-f] [-i] [-s]
 
-EMF 2024 eye renderer
+EMF eye renderer
 
 options:
   -h, --help        show this help message and exit

@@ -10,7 +10,7 @@ log = logging.getLogger("scene")
 # log.setLevel(logging.DEBUG)
 
 
-PATH_DEFAULT = "scenes"
+PATH_DEFAULT = "resources/scenes"
 SCENE_DEFAULT = "default"
 
 

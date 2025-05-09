@@ -1,5 +1,5 @@
 """
-EMF 2024 eye renderer
+EMF eye renderer
 """
 
 import argparse
