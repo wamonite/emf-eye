@@ -1,29 +1,50 @@
-[tool.poetry]
-name = "emf_eye"
+[project]
+name = "emf-eye"
 version = "0.1.0"
 description = ""
-authors = ["Warren Moore <warren@wamo.uk>"]
 readme = "README.md"
+authors = [
+  { name = "Warren Moore", email = "warren@wamonite.com" },
+]
+requires-python = ">=3.13"
+dependencies = [
+    "lpd8>=1.1.1",
+    "numpy>=2.2.5",
+    "opencv-python>=4.11.0.86",
+    "pygame>=2.6.1",
+    "pyopengl>=3.1.9",
+    "pyopengl-accelerate>=3.1.9",
+    "python-rtmidi>=1.5.8",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-pygame = "^2.5.2"
-pyopengl = "^3.1.7"
-pyopengl-accelerate = "^3.1.7"
-numpy = "^1.26.4"
-lpd8 = "^1.1.1"
-opencv-python = "^4.9.0.80"
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+    "ruff>=0.11.9",
+]
 
-[tool.poetry.group.dev.dependencies]
-flake8 = "^7.0.0"
-flake8-commas = "^4.0.0"
-black = "^24.4.2"
-flake8-annotations = "^3.1.1"
-pre-commit = "^3.7.1"
-
-[tool.poetry.scripts]
+[project.scripts]
 emf-eye = "emf_eye.main:run"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv", "setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I", # isort
+    "N", # pep8-naming
+    "D", # pydocstyle
+    "COM", # flake8-commas
+    "ANN", # flake8-annotations
+    "B", # flake8-bugbear
+]
+ignore = [
+    "D203", # one-blank-line-before-class
+    "D212", # multi-line-summary-first-line
+    "ANN401", # any-type
+    "E501", # Line too long
+]
