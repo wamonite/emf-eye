@@ -1,13 +1,14 @@
-from pathlib import Path
-import json
-from typing import Optional, Self
-from .texture import Texture
-from timeit import default_timer as timer
-import logging
+"""Scenes combine video with animation."""
 
+import json
+import logging
+from pathlib import Path
+from timeit import default_timer as timer
+from typing import Self
+
+from .texture import Texture
 
 log = logging.getLogger("scene")
-# log.setLevel(logging.DEBUG)
 
 
 PATH_DEFAULT = "resources/scenes"
@@ -15,8 +16,16 @@ SCENE_DEFAULT = "default"
 
 
 class Scene:
+    """Scene class."""
 
     def __init__(self: Self, path: Path) -> None:
+        """
+        Construct the scene, loading the scene definitions from the path.
+
+        Args:
+            path (Path): Path to the scene directory.
+
+        """
         self._path = path
 
         self._name = None
@@ -38,7 +47,14 @@ class Scene:
         self.validate()
 
     def validate(self: Self) -> None:
-        for name, data in self._data.items():
+        """
+        Validate the loaded scene definitions.
+
+        Raises:
+            FileNotFoundError: If a scene video file is not found.
+
+        """
+        for data in self._data.values():
             for file_key in ["video"]:
                 if file_key in data:
                     file_path = self._path / data[file_key]
@@ -47,23 +63,26 @@ class Scene:
                         raise FileNotFoundError(file_path)
 
     def __repr__(self: Self) -> str:
+        """Return a string representation of the object."""
         return f"<scene.Scene {self._path}>"
 
     @property
-    def fps(self: Self) -> Optional[float]:
+    def fps(self: Self) -> float | None:
+        """Return the video file FPS."""
         return self._texture.fps if self._texture else None
 
-    def update_texture(self: Self) -> Optional[int]:
+    def update_texture(self: Self) -> int | None:
+        """Update the video playback."""
         return self._texture.update()
 
     def update_position(self: Self) -> tuple[float, float]:
+        """Return the interpolated movement coordinates."""
         if not self._moves:
             return 0.0, 0.0
 
         move_now = timer() - self._move_start_time
         move_ratio = move_now / self._move_end_time
         if move_ratio > 1.0:
-            move_ratio = 1.0
             tx_x = self._move_end_x
             tx_y = self._move_end_y
             self._next_move()
@@ -79,7 +98,8 @@ class Scene:
         return tx_x, tx_y
 
     @staticmethod
-    def load_scenes(path: Optional[Path] = None) -> list[Self]:
+    def load_scenes(path: Path | None = None) -> list["Scene"]:
+        """Load all the scenes in a directory."""
         if path is None:
             path = Path(PATH_DEFAULT)
 
@@ -102,6 +122,7 @@ class Scene:
         return scenes
 
     def _next_move(self: Self) -> None:
+        """Load the next move step."""
         self._move_start_x = self._move_end_x
         self._move_start_y = self._move_end_y
 
@@ -112,6 +133,7 @@ class Scene:
         self._set_move(move_idx)
 
     def _set_move(self: Self, idx: int, on_start: bool = False) -> None:
+        """Set the current move steo."""
         self._move_idx = idx
         self._move_start_time = timer()
         self._move_end_x = self._moves[self._move_idx][0]
@@ -125,6 +147,7 @@ class Scene:
         self: Self,
         name: str = SCENE_DEFAULT,
     ) -> None:
+        """Load the resources and start the scene."""
         log.debug("scene start %s %s", self._path, name)
 
         self._name = name
@@ -138,6 +161,7 @@ class Scene:
             self._set_move(0, on_start=True)
 
     def stop(self: Self) -> None:
+        """Stop the scene and release the resources."""
         log.debug("scene stop %s", self._path)
 
         if self._texture:

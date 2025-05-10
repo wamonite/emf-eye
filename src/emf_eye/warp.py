@@ -1,15 +1,16 @@
-import numpy as np
-from enum import IntEnum
-from OpenGL import GL
-from math import sin, cos, pi
-from .exceptions import ScriptException
-from .controller import Controller
-from typing import Optional
-import logging
+"""Texture warp calculator."""
 
+import logging
+from enum import IntEnum
+from math import cos, pi, sin
+
+import numpy as np
+from OpenGL import GL
+
+from .controller import Controller
+from .exceptions import ScriptError
 
 log = logging.getLogger("warp")
-# log.setLevel(logging.DEBUG)
 
 
 WARP_PARAMETER_STEPS = 20
@@ -25,6 +26,8 @@ LINE_WIDTH_SELECTED = 8
 
 
 class Warp(IntEnum):
+    """Warp type enum."""
+
     PARAMETER = 0
     NONE = 1
 
@@ -34,6 +37,7 @@ def calculate_warp(
     display_resolution: tuple[int, int],
     controller: Controller,
 ) -> np.ndarray:
+    """Return the warp as an array of quad-strip coordinates."""
     display_aspect = display_resolution[0] / display_resolution[1]
     display_scale = controller.interpolate(display_aspect, 1.0, KNOB_ASPECT, True)
 
@@ -93,8 +97,7 @@ def calculate_warp(
                 np.float32,
             )
 
-        case _:
-            raise ScriptException(f"load_warp {warp_num} not implemented")
+    raise ScriptError(f"load_warp {warp_num} not implemented")
 
 
 def render_warp(
@@ -104,8 +107,9 @@ def render_warp(
     offset_coord: tuple[float, float],
     show_points: bool,
     invert_x: bool = False,
-    mouse_pos: Optional[tuple[float, float]] = None,
-) -> None:
+    mouse_pos: tuple[float, float] | None = None,
+) -> tuple[tuple[float, float], tuple[int, int]] | None:
+    """Render a warp to the display."""
     GL.glEnable(GL.GL_TEXTURE_2D)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
     GL.glColor3f(1.0, 1.0, 1.0)
@@ -142,7 +146,7 @@ def render_warp(
             points.add(((d_pos_0[0], d_pos_0[1]), (s_x_idx, s_y_idx)))
             points.add(((d_pos_1[0], d_pos_1[1]), (s_x_idx, s_y_idx + 1)))
 
-            points_orig.add(((s_x_pos, s_y_pos_0)))
+            points_orig.add((s_x_pos, s_y_pos_0))
 
             log.debug("s %s %s", s_x_pos, s_y_pos_0)
             log.debug("s %s %s", s_x_pos, s_y_pos_1)
@@ -164,10 +168,12 @@ def render_warp(
 
             if (
                 mouse_pos
-                and mouse_pos[0] >= point[0][0] - point_offset_x
-                and mouse_pos[0] < point[0][0] + point_offset_x
-                and mouse_pos[1] >= point[0][1] - point_offset_y
-                and mouse_pos[1] < point[0][1] + point_offset_y
+                and point[0][0] - point_offset_x
+                <= mouse_pos[0]
+                < point[0][0] + point_offset_x
+                and point[0][1] - point_offset_y
+                <= mouse_pos[1]
+                < point[0][1] + point_offset_y
             ):
                 GL.glLineWidth(LINE_WIDTH_SELECTED)
                 GL.glColor3f(1.0, 0.0, 1.0)

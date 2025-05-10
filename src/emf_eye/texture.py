@@ -1,41 +1,48 @@
-from pathlib import Path
-from OpenGL import GL
-import cv2
-from .exceptions import ScriptException
-from typing import Optional, Self
-import pygame
-import logging
+"""Video as an OpenGL texture."""
 
+import logging
+from pathlib import Path
+from typing import Self
+
+import cv2
+import pygame
+from OpenGL import GL
+
+from .exceptions import ScriptError
 
 log = logging.getLogger("texture")
-# log.setLevel(logging.DEBUG)
 
 
 class Texture:
+    """Texture class."""
 
     def __init__(self: Self, path: Path) -> None:
+        """Load the video from a file."""
         self._path = path
 
-        self._video = None
+        self._video: cv2.VideoCapture | None = None
         self._reset_video()
         self._fps = self._video.get(cv2.CAP_PROP_FPS)
 
         self._tx_ref = GL.glGenTextures(1)
 
     @property
-    def fps(self: Self) -> Optional[float]:
+    def fps(self: Self) -> float | None:
+        """Get the video FPS if available."""
         return self._fps
 
     def _reset_video(self: Self) -> None:
+        """Release and reload the video."""
         if self._video:
             self._video.release()
 
         if not self._path.exists():
-            raise ScriptException(f"video {self._path} not found")
+            raise ScriptError(f"video {self._path} not found")
 
         self._video = cv2.VideoCapture(str(self._path))
 
-    def update(self: Self) -> Optional[int]:
+    def update(self: Self) -> int | None:
+        """Update the texture with a new frame."""
         if not self._tx_ref:
             return None
 
@@ -44,7 +51,7 @@ class Texture:
             self._reset_video()
             cv_read_ok, cv_image = self._video.read()
             if not cv_read_ok:
-                raise ScriptException(f"unable to load {self._path}")
+                raise ScriptError(f"unable to load {self._path}")
 
         tx_h, tx_w, _ = cv_image.shape
         tx_surface = pygame.image.frombuffer(
@@ -80,6 +87,7 @@ class Texture:
         return self._tx_ref
 
     def release(self: Self) -> None:
+        """Release the video and texture resources."""
         if self._tx_ref:
             GL.glDeleteTextures([self._tx_ref])
         self._tx_ref = None

@@ -1,6 +1,9 @@
-class QuitException(Exception):
-    pass
+"""Exceptions."""
 
 
-class ScriptException(Exception):
-    pass
+class QuitError(Exception):
+    """Quit exception."""
+
+
+class ScriptError(Exception):
+    """Script exception."""

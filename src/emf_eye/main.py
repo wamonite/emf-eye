@@ -1,22 +1,20 @@
-"""
-EMF eye renderer
-"""
+"""EMF eye renderer."""
 
 import argparse
+import logging
+from timeit import default_timer as timer
+
 import pygame
 from OpenGL import GL
-from .controller import Controller
-from .scene import Scene
-from .exceptions import QuitException
-from .warp import Warp, calculate_warp, render_warp
-from timeit import default_timer as timer
-import logging
 
+from .controller import Controller
+from .exceptions import QuitError
+from .scene import Scene
+from .warp import Warp, calculate_warp, render_warp
 
 log = logging.getLogger()
 log_handler = logging.StreamHandler()
 log.addHandler(log_handler)
-# log.setLevel(logging.DEBUG)
 
 
 RESOLUTION_TARGET = (1920, 1080)
@@ -25,6 +23,7 @@ SHOWREEL_TIME = 60 * 1
 
 
 def run() -> None:
+    """CLI entry function."""
     # args
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -126,7 +125,7 @@ def run() -> None:
             for event in events:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
-                        raise QuitException()
+                        raise QuitError()
 
                     if event.key == pygame.K_p:
                         show_points = not show_points
@@ -175,7 +174,7 @@ def run() -> None:
                         showreel_time = timer()
 
                 elif event.type == pygame.QUIT:
-                    raise QuitException()
+                    raise QuitError()
 
             if controller.updated:
                 coord_array = None
@@ -186,11 +185,15 @@ def run() -> None:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
             # get texture offset from mouse move
+            sx = sy = None
             if mouse_move:
                 mx, my = pygame.mouse.get_pos()
 
-                ntx_x = 0.5 - (mx / display_resolution[0])
-                ntx_y = (my / display_resolution[1]) - 0.5
+                sx = mx / display_resolution[0]
+                sy = 1.0 - (my / display_resolution[1])
+
+                ntx_x = 0.5 - sx
+                ntx_y = 0.5 - sy
 
                 tx_time_now = timer()
 
@@ -213,6 +216,7 @@ def run() -> None:
                 (tx_x, tx_y),
                 show_points,
                 args.invert,
+                None if sx is None else (sx, sy),
             )
 
             pygame.display.flip()
@@ -221,7 +225,7 @@ def run() -> None:
 
             clock.tick(scene.fps or FPS_DEFAULT)
 
-    except (QuitException, KeyboardInterrupt):
+    except (QuitError, KeyboardInterrupt):
         pass
 
     finally:
