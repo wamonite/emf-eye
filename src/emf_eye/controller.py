@@ -24,12 +24,45 @@ class Controller:
         self._pad_on_release = pad_on_release
 
         # get the LPD8 device
-        self._lpd8 = LPD8()
-        self._lpd8.start()
-        self._lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
-        if not self._sticky:
-            self._lpd8.set_not_sticky_knob(LPD8_PROGRAM, Knobs.ALL_KNOBS)
-        self._lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
+        # NOTE WSL2 supports audio via a Pulse audio server at PULSE_SERVER but does not support MIDI (no /dev/snd/seq)
+        # https://github.com/microsoft/WSL/issues/7107
+        try:
+            self._lpd8 = LPD8()
+
+        except Exception as e:
+            # check the exception message as rtmidi does not export the SystemError class
+            if not str(e).startswith('MidiInAlsa::initialize:'):
+                raise
+
+            self._lpd8 = None
+            log.error("MIDI is not supported on WSL2")
+
+        if self._lpd8:
+            self._lpd8.start()
+            self._lpd8.set_knob_limits(LPD8_PROGRAM, Knobs.ALL_KNOBS, 0, 1, is_int=False)
+            if not self._sticky:
+                self._lpd8.set_not_sticky_knob(LPD8_PROGRAM, Knobs.ALL_KNOBS)
+            self._lpd8.set_pad_mode(LPD8_PROGRAM, Pads.ALL_PADS, Pad.PUSH_MODE)
+
+            def lpd8_knob(data: tuple[int, int, float]) -> None:
+                _, knob, value = data
+                self._knobs[knob - 1] = value
+                self._updated = True
+                log.debug("knob: %s = %s", knob, value)
+
+            def lpd8_pad(data: tuple[int, int, float]) -> None:
+                _, pad, on = data
+                pad = Pads._pad_index[pad]
+                on = on == 1
+                self._updated = True
+
+                if self._pad_on_release != on:
+                    self._pads.append(pad)
+                log.debug("pad: %s = %s", pad, on)
+
+            self._lpd8.subscribe(lpd8_knob, LPD8_PROGRAM, LPD8.CTRL, Knobs.ALL_KNOBS)
+            self._lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_ON, Pads.ALL_PADS)
+            self._lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_OFF, Pads.ALL_PADS)
 
         self._knobs = [0] * Pads.PAD_MAX
         self._updated = False
@@ -37,26 +70,6 @@ class Controller:
         self._pads = []
 
         self.load_defaults()
-
-        def lpd8_knob(data: tuple[int, int, float]) -> None:
-            _, knob, value = data
-            self._knobs[knob - 1] = value
-            self._updated = True
-            log.debug("knob: %s = %s", knob, value)
-
-        def lpd8_pad(data: tuple[int, int, float]) -> None:
-            _, pad, on = data
-            pad = Pads._pad_index[pad]
-            on = on == 1
-            self._updated = True
-
-            if self._pad_on_release != on:
-                self._pads.append(pad)
-            log.debug("pad: %s = %s", pad, on)
-
-        self._lpd8.subscribe(lpd8_knob, LPD8_PROGRAM, LPD8.CTRL, Knobs.ALL_KNOBS)
-        self._lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_ON, Pads.ALL_PADS)
-        self._lpd8.subscribe(lpd8_pad, LPD8_PROGRAM, LPD8.NOTE_OFF, Pads.ALL_PADS)
 
     @property
     def updated(self: Self) -> bool:
@@ -84,10 +97,12 @@ class Controller:
         return pads
 
     def update(self: Self) -> None:
-        self._lpd8.pad_update()
+        if self._lpd8:
+            self._lpd8.pad_update()
 
     def stop(self: Self) -> None:
-        self._lpd8.stop()
+        if self._lpd8:
+            self._lpd8.stop()
 
     def load_defaults(self: Self) -> None:
         try:
@@ -99,8 +114,9 @@ class Controller:
         except FileNotFoundError:
             pass
 
-        for idx, value in enumerate(self._knobs):
-            self._lpd8.set_knob_value(LPD8_PROGRAM, idx + 1, value)
+        if self._lpd8:
+            for idx, value in enumerate(self._knobs):
+                self._lpd8.set_knob_value(LPD8_PROGRAM, idx + 1, value)
 
         self._updated = True
 
