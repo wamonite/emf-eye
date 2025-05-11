@@ -10,7 +10,6 @@ requires-python = ">=3.13"
 dependencies = [
     "lpd8>=1.1.1",
     "numpy>=2.2.5",
-    "opencv-python>=4.11.0.86",
     "pygame>=2.6.1",
     "pyopengl>=3.1.9",
     "pyopengl-accelerate>=3.1.9",
