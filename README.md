@@ -1,5 +1,9 @@
 # EMF Eye
 
+[![Eye @ Electromagnetic Fields 2024](https://img.youtube.com/vi/pcSI2EBCRPM/0.jpg)](https://www.youtube.com/watch?v=pcSI2EBCRPM)
+
+----
+
 ```
 usage: emf-eye [-h] [-f] [-i] [-s]
 
@@ -14,7 +18,7 @@ options:
 
 When running on the projector, both `-f` and `-i` should be enabled.
 
-Warp parameters can be edited with an attached Akai LPD8 controller with program 2 loaded with default values.
+Warp parameters can be edited with an attached [Akai LPD8 controller](https://www.akaipro.com/lpd8) with program 2 loaded with default values.
 
 Keys:-
 
@@ -26,9 +30,3 @@ Keys:-
 * `l`: Load the warp parameters
 * `s`: Save the current warp parameters
 * `q`: Quit
-
-Requires an [Akai LPD8](https://www.akaipro.com/lpd8) to modify warp parameters.
-
-----
-
-[![Eye @ Electromagnetic Fields 2024](https://img.youtube.com/vi/pcSI2EBCRPM/0.jpg)](https://www.youtube.com/watch?v=pcSI2EBCRPM)
