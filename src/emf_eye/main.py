@@ -10,7 +10,7 @@ from OpenGL import GL
 from .controller import Controller
 from .exceptions import QuitError
 from .scene import Scene
-from .warp import Warp, calculate_warp, render_warp, cleanup_shaders
+from .warp import Warp, WarpRenderer, calculate_warp
 
 log = logging.getLogger()
 log_handler = logging.StreamHandler()
@@ -80,6 +80,7 @@ def run() -> None:
     scene = scenes[scene_idx]
     scene.start()
 
+    warp_renderer = WarpRenderer()
     show_points = False
     warp_num = next(iter(Warp))
     coord_array = None
@@ -209,7 +210,7 @@ def run() -> None:
 
             tx_ref = scene.update_texture()
 
-            render_warp(
+            warp_renderer.render(
                 tx_ref,
                 display_resolution,
                 coord_array,
@@ -230,6 +231,6 @@ def run() -> None:
 
     finally:
         scene.stop()
-        cleanup_shaders()  # Clean up shader resources
+        warp_renderer.cleanup()
         pygame.quit()
         controller.stop()

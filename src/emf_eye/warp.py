@@ -33,41 +33,109 @@ class Warp(IntEnum):
     NONE = 1
 
 
-# Global shader instances
-_default_shader = None
-_warp_shader = None
-_quad_vertices = None
-_quad_indices = None
+class WarpRenderer:
+    """Manages warp rendering with shaders."""
 
+    def __init__(self):
+        self._default_shader = None
+        self._warp_shader = None
+        self._quad_vertices = None
+        self._quad_indices = None
 
-def _init_shaders():
-    """Initialize shaders and quad mesh data."""
-    global _default_shader, _warp_shader, _quad_vertices, _quad_indices
-    
-    if _default_shader is None:
-        _default_shader = create_default_shader()
-        
-    if _warp_shader is None:
-        _warp_shader = create_warp_shader()
-        
-    if _quad_vertices is None:
-        # Create a full screen quad with position and texture coordinates
-        _quad_vertices = np.array([
-            # positions    # texture coords
-            0.0, 0.0,      0.0, 0.0,  # bottom left
-            1.0, 0.0,      1.0, 0.0,  # bottom right
-            1.0, 1.0,      1.0, 1.0,  # top right
-            0.0, 1.0,      0.0, 1.0   # top left
-        ], dtype=np.float32)
-        
-        _quad_indices = np.array([
-            0, 1, 2,  # first triangle
-            0, 2, 3   # second triangle
-        ], dtype=np.uint32)
-        
-        # Setup the mesh for both shaders
-        _default_shader.setup_mesh(_quad_vertices, _quad_indices)
-        _warp_shader.setup_mesh(_quad_vertices, _quad_indices)
+    def _init_shaders(self):
+        """Initialize shaders and quad mesh data."""
+        if self._default_shader is None:
+            self._default_shader = create_default_shader()
+
+        if self._warp_shader is None:
+            self._warp_shader = create_warp_shader()
+
+        if self._quad_vertices is None:
+            # Create a full screen quad with position and texture coordinates
+            self._quad_vertices = np.array([
+                # positions    # texture coords
+                0.0, 0.0,      0.0, 0.0,  # bottom left
+                1.0, 0.0,      1.0, 0.0,  # bottom right
+                1.0, 1.0,      1.0, 1.0,  # top right
+                0.0, 1.0,      0.0, 1.0,   # top left
+            ], dtype=np.float32)
+
+            self._quad_indices = np.array([
+                0, 1, 2,  # first triangle
+                0, 2, 3,   # second triangle
+            ], dtype=np.uint32)
+
+            # Setup the mesh for both shaders
+            self._default_shader.setup_mesh(self._quad_vertices, self._quad_indices)
+            self._warp_shader.setup_mesh(self._quad_vertices, self._quad_indices)
+
+    def render(
+        self,
+        tx_ref: int,
+        display_resolution: tuple[int, int],
+        coord_array: np.ndarray,
+        offset_coord: tuple[float, float],
+        show_points: bool,
+        invert_x: bool = False,
+        mouse_pos: tuple[float, float] | None = None,
+    ) -> tuple[tuple[float, float], tuple[int, int]] | None:
+        """Render a warp to the display using shaders."""
+        # Initialize shaders if needed
+        self._init_shaders()
+
+        # Bind texture (no need to enable GL_TEXTURE_2D in Core Profile)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
+
+        # Choose shader based on warp type
+        if coord_array.shape == (2, 2, 2):  # This is the shape for Warp.NONE
+            # Use default shader for no warping
+            self._default_shader.use()
+            self._default_shader.set_int("texture1", 0)
+            self._default_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
+            self._default_shader.draw_mesh(6)  # 6 indices for 2 triangles
+        else:
+            # Use warp shader for parameter warping
+            self._warp_shader.use()
+            self._warp_shader.set_int("texture1", 0)
+            self._warp_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
+            self._warp_shader.set_float("invertX", 1.0 if invert_x else 0.0)
+
+            # Set controller parameters
+            from .controller import Controller
+            controller = Controller()
+
+            # Set shader uniforms from controller values
+            self._warp_shader.set_float("xPos", controller._knobs[KNOB_X_POS])
+            self._warp_shader.set_float("xFan", controller._knobs[KNOB_X_FAN])
+            self._warp_shader.set_float("aspect", display_resolution[0] / display_resolution[1])
+            self._warp_shader.set_float("yPos", controller._knobs[KNOB_Y_POS])
+            self._warp_shader.set_float("yFan", controller._knobs[KNOB_Y_FAN])
+
+            self._warp_shader.draw_mesh(6)  # 6 indices for 2 triangles
+
+        # Unbind texture
+        GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+
+        # If showing points is enabled, draw them using immediate mode
+        # NOTE: Disabled for OpenGL Core Profile compatibility
+        # TODO: Implement debug point rendering using modern OpenGL
+        selected = None
+        if show_points:
+            # Legacy immediate mode rendering not available in Core Profile
+            # Would need to implement using shaders and VAOs
+            pass
+
+        return selected
+
+    def cleanup(self):
+        """Clean up shader resources."""
+        if self._default_shader:
+            self._default_shader.release()
+            self._default_shader = None
+
+        if self._warp_shader:
+            self._warp_shader.release()
+            self._warp_shader = None
 
 
 def calculate_warp(
@@ -141,74 +209,3 @@ def calculate_warp(
             )
 
     raise ScriptError(f"load_warp {warp_num} not implemented")
-
-
-def render_warp(
-    tx_ref: int,
-    display_resolution: tuple[int, int],
-    coord_array: np.ndarray,
-    offset_coord: tuple[float, float],
-    show_points: bool,
-    invert_x: bool = False,
-    mouse_pos: tuple[float, float] | None = None,
-) -> tuple[tuple[float, float], tuple[int, int]] | None:
-    """Render a warp to the display using shaders."""
-    # Initialize shaders if needed
-    _init_shaders()
-    
-    # Bind texture (no need to enable GL_TEXTURE_2D in Core Profile)
-    GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
-    
-    # Choose shader based on warp type
-    if coord_array.shape == (2, 2, 2):  # This is the shape for Warp.NONE
-        # Use default shader for no warping
-        _default_shader.use()
-        _default_shader.set_int("texture1", 0)
-        _default_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
-        _default_shader.draw_mesh(6)  # 6 indices for 2 triangles
-    else:
-        # Use warp shader for parameter warping
-        _warp_shader.use()
-        _warp_shader.set_int("texture1", 0)
-        _warp_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
-        _warp_shader.set_float("invertX", 1.0 if invert_x else 0.0)
-        
-        # Set controller parameters
-        from .controller import Controller
-        controller = Controller()
-        
-        # Set shader uniforms from controller values
-        _warp_shader.set_float("xPos", controller._knobs[KNOB_X_POS])
-        _warp_shader.set_float("xFan", controller._knobs[KNOB_X_FAN])
-        _warp_shader.set_float("aspect", display_resolution[0] / display_resolution[1])
-        _warp_shader.set_float("yPos", controller._knobs[KNOB_Y_POS])
-        _warp_shader.set_float("yFan", controller._knobs[KNOB_Y_FAN])
-        
-        _warp_shader.draw_mesh(6)  # 6 indices for 2 triangles
-    
-    # Unbind texture
-    GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-    
-    # If showing points is enabled, draw them using immediate mode
-    # NOTE: Disabled for OpenGL Core Profile compatibility
-    # TODO: Implement debug point rendering using modern OpenGL
-    selected = None
-    if show_points:
-        # Legacy immediate mode rendering not available in Core Profile
-        # Would need to implement using shaders and VAOs
-        pass
-
-    return selected
-
-
-def cleanup_shaders():
-    """Clean up shader resources."""
-    global _default_shader, _warp_shader
-    
-    if _default_shader:
-        _default_shader.release()
-        _default_shader = None
-        
-    if _warp_shader:
-        _warp_shader.release()
-        _warp_shader = None
