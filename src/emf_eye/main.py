@@ -10,7 +10,7 @@ from OpenGL import GL
 from .controller import Controller
 from .exceptions import QuitError
 from .scene import Scene
-from .warp import Warp, calculate_warp, render_warp
+from .warp import Warp, calculate_warp, render_warp, cleanup_shaders
 
 log = logging.getLogger()
 log_handler = logging.StreamHandler()
@@ -55,6 +55,11 @@ def run() -> None:
     # initialise the display
     pygame.init()
 
+    # Request OpenGL 3.3 Core Profile
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MAJOR_VERSION, 3)
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MINOR_VERSION, 3)
+    pygame.display.gl_set_attribute(pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_CORE)
+
     display_resolution = RESOLUTION_TARGET
     display_flags = pygame.OPENGL | pygame.DOUBLEBUF
     if args.fullscreen:
@@ -65,14 +70,9 @@ def run() -> None:
 
     clock = pygame.time.Clock()
 
-    # orthographic projection - (0, 0) bottom left, (1, 1) top right
-    GL.glMatrixMode(GL.GL_PROJECTION)
-    GL.glLoadIdentity()
-
-    GL.glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0)
-
-    GL.glMatrixMode(GL.GL_MODELVIEW)
-    GL.glLoadIdentity()
+    # Enable blending for transparency
+    GL.glEnable(GL.GL_BLEND)
+    GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
 
     # initliase scenes
     scenes = Scene.load_scenes()
@@ -230,5 +230,6 @@ def run() -> None:
 
     finally:
         scene.stop()
+        cleanup_shaders()  # Clean up shader resources
         pygame.quit()
         controller.stop()

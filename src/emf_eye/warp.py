@@ -9,6 +9,7 @@ from OpenGL import GL
 
 from .controller import Controller
 from .exceptions import ScriptError
+from .shader import create_default_shader, create_warp_shader
 
 log = logging.getLogger("warp")
 
@@ -32,12 +33,54 @@ class Warp(IntEnum):
     NONE = 1
 
 
+# Global shader instances
+_default_shader = None
+_warp_shader = None
+_quad_vertices = None
+_quad_indices = None
+
+
+def _init_shaders():
+    """Initialize shaders and quad mesh data."""
+    global _default_shader, _warp_shader, _quad_vertices, _quad_indices
+    
+    if _default_shader is None:
+        _default_shader = create_default_shader()
+        
+    if _warp_shader is None:
+        _warp_shader = create_warp_shader()
+        
+    if _quad_vertices is None:
+        # Create a full screen quad with position and texture coordinates
+        _quad_vertices = np.array([
+            # positions    # texture coords
+            0.0, 0.0,      0.0, 0.0,  # bottom left
+            1.0, 0.0,      1.0, 0.0,  # bottom right
+            1.0, 1.0,      1.0, 1.0,  # top right
+            0.0, 1.0,      0.0, 1.0   # top left
+        ], dtype=np.float32)
+        
+        _quad_indices = np.array([
+            0, 1, 2,  # first triangle
+            0, 2, 3   # second triangle
+        ], dtype=np.uint32)
+        
+        # Setup the mesh for both shaders
+        _default_shader.setup_mesh(_quad_vertices, _quad_indices)
+        _warp_shader.setup_mesh(_quad_vertices, _quad_indices)
+
+
 def calculate_warp(
     warp_num: Warp,
     display_resolution: tuple[int, int],
     controller: Controller,
 ) -> np.ndarray:
-    """Return the warp as an array of quad-strip coordinates."""
+    """
+    Return the warp as an array of quad-strip coordinates.
+    
+    Note: This function is kept for compatibility but is no longer used
+    for rendering with shaders.
+    """
     display_aspect = display_resolution[0] / display_resolution[1]
     display_scale = controller.interpolate(display_aspect, 1.0, KNOB_ASPECT, True)
 
@@ -109,92 +152,63 @@ def render_warp(
     invert_x: bool = False,
     mouse_pos: tuple[float, float] | None = None,
 ) -> tuple[tuple[float, float], tuple[int, int]] | None:
-    """Render a warp to the display."""
-    GL.glEnable(GL.GL_TEXTURE_2D)
+    """Render a warp to the display using shaders."""
+    # Initialize shaders if needed
+    _init_shaders()
+    
+    # Bind texture (no need to enable GL_TEXTURE_2D in Core Profile)
     GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
-    GL.glColor3f(1.0, 1.0, 1.0)
-
-    d_y_size, d_x_size, _ = coord_array.shape
-
-    points = set()
-    points_orig = set()
-
-    for s_y_idx in range(d_y_size - 1):
-        s_y_pos_0 = s_y_idx / (d_y_size - 1)
-        s_y_pos_0 += offset_coord[1]
-        s_y_pos_1 = (s_y_idx + 1) / (d_y_size - 1)
-        s_y_pos_1 += offset_coord[1]
-
-        GL.glBegin(GL.GL_QUAD_STRIP)
-        log.debug("----")
-
-        for s_x_idx in range(d_x_size):
-            s_x_pos = s_x_idx / (d_x_size - 1)
-            if invert_x:
-                s_x_pos = 1.0 - s_x_pos
-            s_x_pos += offset_coord[0]
-
-            d_pos_0 = coord_array[s_y_idx, s_x_idx]
-            d_pos_1 = coord_array[s_y_idx + 1, s_x_idx]
-
-            GL.glTexCoord2f(s_x_pos, s_y_pos_0)
-            GL.glVertex3f(d_pos_0[0], d_pos_0[1], 0.0)
-
-            GL.glTexCoord2f(s_x_pos, s_y_pos_1)
-            GL.glVertex3f(d_pos_1[0], d_pos_1[1], 0.0)
-
-            points.add(((d_pos_0[0], d_pos_0[1]), (s_x_idx, s_y_idx)))
-            points.add(((d_pos_1[0], d_pos_1[1]), (s_x_idx, s_y_idx + 1)))
-
-            points_orig.add((s_x_pos, s_y_pos_0))
-
-            log.debug("s %s %s", s_x_pos, s_y_pos_0)
-            log.debug("s %s %s", s_x_pos, s_y_pos_1)
-            log.debug("d %s %s", d_pos_0[0], d_pos_0[1])
-            log.debug("d %s %s", d_pos_1[0], d_pos_1[1])
-
-        GL.glEnd()
-
+    
+    # Choose shader based on warp type
+    if coord_array.shape == (2, 2, 2):  # This is the shape for Warp.NONE
+        # Use default shader for no warping
+        _default_shader.use()
+        _default_shader.set_int("texture1", 0)
+        _default_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
+        _default_shader.draw_mesh(6)  # 6 indices for 2 triangles
+    else:
+        # Use warp shader for parameter warping
+        _warp_shader.use()
+        _warp_shader.set_int("texture1", 0)
+        _warp_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
+        _warp_shader.set_float("invertX", 1.0 if invert_x else 0.0)
+        
+        # Set controller parameters
+        from .controller import Controller
+        controller = Controller()
+        
+        # Set shader uniforms from controller values
+        _warp_shader.set_float("xPos", controller._knobs[KNOB_X_POS])
+        _warp_shader.set_float("xFan", controller._knobs[KNOB_X_FAN])
+        _warp_shader.set_float("aspect", display_resolution[0] / display_resolution[1])
+        _warp_shader.set_float("yPos", controller._knobs[KNOB_Y_POS])
+        _warp_shader.set_float("yFan", controller._knobs[KNOB_Y_FAN])
+        
+        _warp_shader.draw_mesh(6)  # 6 indices for 2 triangles
+    
+    # Unbind texture
     GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-
+    
+    # If showing points is enabled, draw them using immediate mode
+    # NOTE: Disabled for OpenGL Core Profile compatibility
+    # TODO: Implement debug point rendering using modern OpenGL
     selected = None
     if show_points:
-        display_aspect = display_resolution[0] / display_resolution[1]
-        point_offset_x = POINT_OFFSET
-        point_offset_y = point_offset_x * display_aspect
-        for point in points:
-            GL.glLineWidth(LINE_WIDTH_NORMAL)
-            GL.glColor3f(0.0, 1.0, 0.0)
-
-            if (
-                mouse_pos
-                and point[0][0] - point_offset_x
-                <= mouse_pos[0]
-                < point[0][0] + point_offset_x
-                and point[0][1] - point_offset_y
-                <= mouse_pos[1]
-                < point[0][1] + point_offset_y
-            ):
-                GL.glLineWidth(LINE_WIDTH_SELECTED)
-                GL.glColor3f(1.0, 0.0, 1.0)
-                selected = point
-
-            GL.glBegin(GL.GL_LINE_LOOP)
-            GL.glVertex2f(point[0][0] - point_offset_x, point[0][1] - point_offset_y)
-            GL.glVertex2f(point[0][0] - point_offset_x, point[0][1] + point_offset_y)
-            GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] + point_offset_y)
-            GL.glVertex2f(point[0][0] + point_offset_x, point[0][1] - point_offset_y)
-            GL.glEnd()
-
-        for point in points_orig:
-            GL.glLineWidth(LINE_WIDTH_NORMAL)
-            GL.glColor3f(1.0, 0.0, 0.0)
-
-            GL.glBegin(GL.GL_LINE_LOOP)
-            GL.glVertex2f(point[0] - point_offset_x, point[1] - point_offset_y)
-            GL.glVertex2f(point[0] - point_offset_x, point[1] + point_offset_y)
-            GL.glVertex2f(point[0] + point_offset_x, point[1] + point_offset_y)
-            GL.glVertex2f(point[0] + point_offset_x, point[1] - point_offset_y)
-            GL.glEnd()
+        # Legacy immediate mode rendering not available in Core Profile
+        # Would need to implement using shaders and VAOs
+        pass
 
     return selected
+
+
+def cleanup_shaders():
+    """Clean up shader resources."""
+    global _default_shader, _warp_shader
+    
+    if _default_shader:
+        _default_shader.release()
+        _default_shader = None
+        
+    if _warp_shader:
+        _warp_shader.release()
+        _warp_shader = None
