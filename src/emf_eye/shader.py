@@ -65,6 +65,11 @@ class Shader:
         location = GL.glGetUniformLocation(self._program, name)
         GL.glUniform2f(location, x, y)
 
+    def set_vec3(self: Self, name: str, x: float, y: float, z: float) -> None:
+        """Set a vec3 uniform value."""
+        location = GL.glGetUniformLocation(self._program, name)
+        GL.glUniform3f(location, x, y, z)
+
     def set_int(self: Self, name: str, value: int) -> None:
         """Set an int uniform value."""
         location = GL.glGetUniformLocation(self._program, name)
@@ -89,13 +94,20 @@ class Shader:
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self._ebo)
         GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL.GL_STATIC_DRAW)
 
-        # Position attribute
-        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 4 * 4, None)
-        GL.glEnableVertexAttribArray(0)
-
-        # Texture coordinate attribute
-        GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, 4 * 4, GL.ctypes.c_void_p(2 * 4))
-        GL.glEnableVertexAttribArray(1)
+        # Determine stride based on vertex data
+        if len(vertices) % 4 == 0:  # Position + texcoord (4 floats per vertex)
+            stride = 4 * 4
+            # Position attribute
+            GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, None)
+            GL.glEnableVertexAttribArray(0)
+            # Texture coordinate attribute
+            GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(2 * 4))
+            GL.glEnableVertexAttribArray(1)
+        else:  # Position only (2 floats per vertex)
+            stride = 2 * 4
+            # Position attribute only
+            GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, None)
+            GL.glEnableVertexAttribArray(0)
 
         GL.glBindVertexArray(0)
 
@@ -204,6 +216,36 @@ def create_default_shader() -> Shader:
     """Create the default shader."""
     return Shader(DEFAULT_VERTEX_SHADER, DEFAULT_FRAGMENT_SHADER)
 
+POINT_VERTEX_SHADER = """
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec3 aColor;
+
+out vec3 vertexColor;
+
+void main()
+{
+    gl_Position = vec4(aPos, 0.0, 1.0);
+    vertexColor = aColor;
+}
+"""
+
+POINT_FRAGMENT_SHADER = """
+#version 330 core
+out vec4 FragColor;
+
+in vec3 vertexColor;
+
+void main()
+{
+    FragColor = vec4(vertexColor, 1.0);
+}
+"""
+
 def create_warp_shader() -> Shader:
     """Create the warp shader."""
     return Shader(WARP_VERTEX_SHADER, WARP_FRAGMENT_SHADER)
+
+def create_point_shader() -> Shader:
+    """Create the point rendering shader."""
+    return Shader(POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER)
