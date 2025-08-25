@@ -182,11 +182,6 @@ in vec2 TexCoord;
 
 uniform sampler2D texture1;
 uniform vec2 offset;
-uniform float xPos;
-uniform float xFan;
-uniform float aspect;
-uniform float yPos;
-uniform float yFan;
 uniform bool invertX;
 
 void main()
@@ -201,47 +196,7 @@ void main()
         tc.x = 1.0 - tc.x;
     }
     
-    // Apply warp parameters
-    float displayScale = mix(aspect, 1.0, xFan);
-    
-    float x = tc.x;
-    float y = tc.y;
-    
-    // Apply sine/cosine warping similar to the Python implementation
-    float pi = 3.14159265359;
-    
-    // X position warping
-    float xCos = (1.0 - cos(x * pi)) / 2.0;
-    float xPosWarped = mix(xCos, x, xPos);
-    
-    // Y fan effect
-    float ySin = sin(y * pi);
-    float yFanWarped = mix(ySin, 1.0, yFan);
-    
-    // X fan effect
-    float xSin = sin(x * pi);
-    float xFanWarped = mix(xSin, 1.0, xFan);
-    
-    // Y position warping
-    float yCos = (1.0 - cos(y * pi)) / 2.0;
-    float yPosWarped = mix(yCos, y, yPos);
-    
-    // Apply the warping
-    vec2 warped;
-    warped.x = xPosWarped - 0.5;
-    warped.x *= yFanWarped;
-    warped.x /= displayScale;
-    warped.x += 0.5;
-    
-    float yFanFactor = 1.0 - xFanWarped;
-    yFanFactor *= 3.0;  // Y_FAN_SCALE
-    yFanFactor += 1.0;
-    
-    warped.y = yPosWarped - 0.5;
-    warped.y *= yFanFactor;
-    warped.y += 0.5;
-    
-    FragColor = texture(texture1, warped);
+    FragColor = texture(texture1, tc);
 }
 """
 

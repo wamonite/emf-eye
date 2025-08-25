@@ -83,7 +83,7 @@ class WarpRenderer:
         # Initialize shaders if needed
         self._init_shaders()
 
-        # Bind texture (no need to enable GL_TEXTURE_2D in Core Profile)
+        # Bind texture
         GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
 
         # Choose shader based on warp type
@@ -92,40 +92,67 @@ class WarpRenderer:
             self._default_shader.use()
             self._default_shader.set_int("texture1", 0)
             self._default_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
-            self._default_shader.draw_mesh(6)  # 6 indices for 2 triangles
+            self._default_shader.draw_mesh(6)
         else:
-            # Use warp shader for parameter warping
+            # Convert coord_array to vertex data for shader rendering
+            self._setup_warp_mesh(coord_array, offset_coord, invert_x)
+            
             self._warp_shader.use()
             self._warp_shader.set_int("texture1", 0)
             self._warp_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
             self._warp_shader.set_float("invertX", 1.0 if invert_x else 0.0)
+            
+            # Draw the warp mesh
+            self._draw_warp_mesh()
 
-            # Set controller parameters
-            from .controller import Controller
-            controller = Controller()
-
-            # Set shader uniforms from controller values
-            self._warp_shader.set_float("xPos", controller._knobs[KNOB_X_POS])
-            self._warp_shader.set_float("xFan", controller._knobs[KNOB_X_FAN])
-            self._warp_shader.set_float("aspect", display_resolution[0] / display_resolution[1])
-            self._warp_shader.set_float("yPos", controller._knobs[KNOB_Y_POS])
-            self._warp_shader.set_float("yFan", controller._knobs[KNOB_Y_FAN])
-
-            self._warp_shader.draw_mesh(6)  # 6 indices for 2 triangles
-
-        # Unbind texture
         GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
+        return None
 
-        # If showing points is enabled, draw them using immediate mode
-        # NOTE: Disabled for OpenGL Core Profile compatibility
-        # TODO: Implement debug point rendering using modern OpenGL
-        selected = None
-        if show_points:
-            # Legacy immediate mode rendering not available in Core Profile
-            # Would need to implement using shaders and VAOs
-            pass
+    def _setup_warp_mesh(self, coord_array: np.ndarray, offset_coord: tuple[float, float], invert_x: bool):
+        """Convert coord_array to mesh data matching original render_warp behavior."""
+        d_y_size, d_x_size, _ = coord_array.shape
+        
+        vertices = []
+        indices = []
+        vertex_count = 0
+        
+        for s_y_idx in range(d_y_size - 1):
+            s_y_pos_0 = s_y_idx / (d_y_size - 1)
+            s_y_pos_1 = (s_y_idx + 1) / (d_y_size - 1)
+            
+            for s_x_idx in range(d_x_size):
+                s_x_pos = s_x_idx / (d_x_size - 1)
+                if invert_x:
+                    s_x_pos = 1.0 - s_x_pos
+                
+                d_pos_0 = coord_array[s_y_idx, s_x_idx]
+                d_pos_1 = coord_array[s_y_idx + 1, s_x_idx]
+                
+                # Add vertices (position, texcoord)
+                vertices.extend([
+                    d_pos_0[0], d_pos_0[1], s_x_pos, s_y_pos_0,
+                    d_pos_1[0], d_pos_1[1], s_x_pos, s_y_pos_1
+                ])
+                
+                if s_x_idx < d_x_size - 1:
+                    # Create quad with two triangles
+                    indices.extend([
+                        vertex_count, vertex_count + 2, vertex_count + 1,
+                        vertex_count + 1, vertex_count + 2, vertex_count + 3
+                    ])
+                
+                vertex_count += 2
+        
+        self._warp_vertices = np.array(vertices, dtype=np.float32)
+        self._warp_indices = np.array(indices, dtype=np.uint32)
+        
+        # Update mesh
+        self._warp_shader.setup_mesh(self._warp_vertices, self._warp_indices)
 
-        return selected
+    def _draw_warp_mesh(self):
+        """Draw the warp mesh."""
+        if hasattr(self, '_warp_indices'):
+            self._warp_shader.draw_mesh(len(self._warp_indices))
 
     def cleanup(self):
         """Clean up shader resources."""
