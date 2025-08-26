@@ -171,77 +171,88 @@ class WarpRenderer:
         if coord_array.shape == (2, 2, 2):
             return None
             
-        if not hasattr(self, '_warp_points') or self._coord_array_changed:
-            self._update_warp_points(coord_array)
+        display_aspect = display_resolution[0] / display_resolution[1]
+        
+        if not hasattr(self, '_point_vertices') or self._coord_array_changed:
+            self._update_warp_points(coord_array, display_aspect)
             self._coord_array_changed = False
         
-        display_aspect = display_resolution[0] / display_resolution[1]
-        point_offset = POINT_OFFSET * display_aspect
-        selected = None
+        # Setup buffers
+        vao = GL.glGenVertexArrays(1)
+        vbo_pos = GL.glGenBuffers(1)
+        vbo_type = GL.glGenBuffers(1)
         
-        # Render warp points (green)
-        for x, y in self._warp_points:
-            color = [0.0, 1.0, 0.0]
-            if (mouse_pos and abs(x - mouse_pos[0]) < POINT_OFFSET and abs(y - mouse_pos[1]) < point_offset):
-                color = [1.0, 0.0, 1.0]
-                selected = ((x, y), (0, 0))  # Simplified selection
-            self._render_point_box(x, y, color, display_aspect)
+        GL.glBindVertexArray(vao)
         
-        # Render texture points (red with offset)
-        for x, y in self._texture_points:
-            self._render_point_box(x + offset_coord[0], y + offset_coord[1], [1.0, 0.0, 0.0], display_aspect)
+        # Position buffer
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_pos)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_vertices.nbytes, self._point_vertices, GL.GL_STATIC_DRAW)
+        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 8, None)
+        GL.glEnableVertexAttribArray(0)
         
-        return selected
+        # Type buffer
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_type)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_types.nbytes, self._point_types, GL.GL_STATIC_DRAW)
+        GL.glVertexAttribIPointer(1, 1, GL.GL_INT, 4, None)
+        GL.glEnableVertexAttribArray(1)
+        
+        self._point_shader.use()
+        self._point_shader.set_vec2("textureOffset", offset_coord[0] * 2.0, -offset_coord[1] * 2.0)
+        
+        # Draw each box as a line loop (4 vertices per box)
+        for i in range(self._num_boxes):
+            GL.glDrawArrays(GL.GL_LINE_LOOP, i * 4, 4)
+        
+        GL.glDeleteBuffers(1, [vbo_pos])
+        GL.glDeleteBuffers(1, [vbo_type])
+        GL.glDeleteVertexArrays(1, [vao])
+        
+        return None
 
-    def _update_warp_points(self, coord_array: np.ndarray):
+    def _update_warp_points(self, coord_array: np.ndarray, display_aspect: float):
         """Update warp and texture point lists when coord_array changes."""
         d_y_size, d_x_size, _ = coord_array.shape
-        self._warp_points = []
-        self._texture_points = []
+        
+        # Create box template
+        offset_x = POINT_OFFSET * 2.0
+        offset_y = POINT_OFFSET * 2.0 * display_aspect
+        box_template = np.array([
+            -offset_x, -offset_y,
+            offset_x, -offset_y,
+            offset_x, offset_y,
+            -offset_x, offset_y,
+        ], dtype=np.float32)
+        
+        all_vertices = []
+        all_types = []
         
         for s_y_idx in range(d_y_size - 1):
             for s_x_idx in range(d_x_size):
                 # Warp points (from coord_array)
-                self._warp_points.extend([
-                    coord_array[s_y_idx, s_x_idx],
-                    coord_array[s_y_idx + 1, s_x_idx]
-                ])
+                for warp_pos in [coord_array[s_y_idx, s_x_idx], coord_array[s_y_idx + 1, s_x_idx]]:
+                    ndc_x = warp_pos[0] * 2.0 - 1.0
+                    ndc_y = (1.0 - warp_pos[1]) * 2.0 - 1.0
+                    
+                    for j in range(0, 8, 2):
+                        all_vertices.extend([ndc_x + box_template[j], ndc_y + box_template[j+1]])
+                        all_types.append(0)
                 
                 # Texture points (original grid)
                 s_x_pos = s_x_idx / (d_x_size - 1)
                 s_y_pos = s_y_idx / (d_y_size - 1)
-                self._texture_points.append([s_x_pos, s_y_pos])
+                
+                ndc_x = s_x_pos * 2.0 - 1.0
+                ndc_y = (1.0 - s_y_pos) * 2.0 - 1.0
+                
+                for j in range(0, 8, 2):
+                    all_vertices.extend([ndc_x + box_template[j], ndc_y + box_template[j+1]])
+                    all_types.append(1)
+        
+        self._point_vertices = np.array(all_vertices, dtype=np.float32)
+        self._point_types = np.array(all_types, dtype=np.int32)
+        self._num_boxes = len(all_types) // 4
 
-    def _render_point_box(self, x: float, y: float, color: list[float], display_aspect: float):
-        """Render a single point box."""
-        self._point_shader.use()
-        self._point_shader.set_vec3("color", color[0], color[1], color[2])
-        
-        ndc_x = x * 2.0 - 1.0
-        ndc_y = (1.0 - y) * 2.0 - 1.0
-        offset_x = POINT_OFFSET * 2.0
-        offset_y = POINT_OFFSET * 2.0 * display_aspect
-        
-        vertices = np.array([
-            ndc_x - offset_x, ndc_y - offset_y,
-            ndc_x + offset_x, ndc_y - offset_y,
-            ndc_x + offset_x, ndc_y + offset_y,
-            ndc_x - offset_x, ndc_y + offset_y,
-        ], dtype=np.float32)
-        
-        vao = GL.glGenVertexArrays(1)
-        vbo = GL.glGenBuffers(1)
-        
-        GL.glBindVertexArray(vao)
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo)
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL.GL_STATIC_DRAW)
-        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 8, None)
-        GL.glEnableVertexAttribArray(0)
-        
-        GL.glDrawArrays(GL.GL_LINE_LOOP, 0, 4)
-        
-        GL.glDeleteBuffers(1, [vbo])
-        GL.glDeleteVertexArrays(1, [vao])
+
 
     def _render_point_square(self, x: float, y: float, offset_x: float, offset_y: float, color: list[float]):
         """Render a single point square using line loop."""
@@ -300,9 +311,6 @@ def calculate_warp(
 ) -> np.ndarray:
     """
     Return the warp as an array of quad-strip coordinates.
-    
-    Note: This function is kept for compatibility but is no longer used
-    for rendering with shaders.
     """
     display_aspect = display_resolution[0] / display_resolution[1]
     display_scale = controller.interpolate(display_aspect, 1.0, KNOB_ASPECT, True)

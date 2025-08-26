@@ -219,12 +219,25 @@ def create_default_shader() -> Shader:
 POINT_VERTEX_SHADER = """
 #version 330 core
 layout (location = 0) in vec2 aPos;
+layout (location = 1) in int aIsTexture;
 
-uniform vec3 color;
+out vec3 vertexColor;
+
+uniform vec2 textureOffset;
 
 void main()
 {
-    gl_Position = vec4(aPos, 0.0, 1.0);
+    vec2 pos = aPos;
+    
+    // Apply offset for texture points
+    if (aIsTexture == 1) {
+        pos += textureOffset;
+    }
+    
+    gl_Position = vec4(pos, 0.0, 1.0);
+    
+    // Set color: green for warp points, red for texture points
+    vertexColor = (aIsTexture == 1) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
 }
 """
 
@@ -232,11 +245,11 @@ POINT_FRAGMENT_SHADER = """
 #version 330 core
 out vec4 FragColor;
 
-uniform vec3 color;
+in vec3 vertexColor;
 
 void main()
 {
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(vertexColor, 1.0);
 }
 """
 
