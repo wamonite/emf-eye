@@ -40,6 +40,9 @@ class WarpRenderer:
         self._warp_shader = None
         self._point_shader = None
         self._coord_array_changed = True
+        self._point_vao = None
+        self._point_vbo_pos = None
+        self._point_vbo_type = None
 
     def _init_shaders(self):
         """Initialize shaders and quad mesh data."""
@@ -67,8 +70,10 @@ class WarpRenderer:
         GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
 
         # Convert coord_array to vertex data for shader rendering
-        self._setup_warp_mesh(coord_array, offset_coord, invert_x)
-        self._coord_array_changed = True
+        if not hasattr(self, '_cached_coord_array') or not np.array_equal(self._cached_coord_array, coord_array):
+            self._setup_warp_mesh(coord_array, offset_coord, invert_x)
+            self._cached_coord_array = coord_array.copy()
+            self._coord_array_changed = True
         
         self._warp_shader.use()
         self._warp_shader.set_int("texture1", 0)
@@ -138,39 +143,41 @@ class WarpRenderer:
         
         if not hasattr(self, '_point_vertices') or self._coord_array_changed:
             self._update_warp_points(coord_array, display_aspect)
+            self._setup_point_buffers()
             self._coord_array_changed = False
         
-        # Setup buffers
-        vao = GL.glGenVertexArrays(1)
-        vbo_pos = GL.glGenBuffers(1)
-        vbo_type = GL.glGenBuffers(1)
+        self._point_shader.use()
+        self._point_shader.set_vec2("textureOffset", offset_coord[0] * 2.0, -offset_coord[1] * 2.0)
         
-        GL.glBindVertexArray(vao)
+        GL.glBindVertexArray(self._point_vao)
+        for i in range(self._num_boxes):
+            GL.glDrawArrays(GL.GL_LINE_LOOP, i * 4, 4)
+        GL.glBindVertexArray(0)
+        
+        return None
+
+    def _setup_point_buffers(self):
+        """Setup persistent point rendering buffers."""
+        if self._point_vao is None:
+            self._point_vao = GL.glGenVertexArrays(1)
+            self._point_vbo_pos = GL.glGenBuffers(1)
+            self._point_vbo_type = GL.glGenBuffers(1)
+        
+        GL.glBindVertexArray(self._point_vao)
         
         # Position buffer
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_pos)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._point_vbo_pos)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_vertices.nbytes, self._point_vertices, GL.GL_STATIC_DRAW)
         GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 8, None)
         GL.glEnableVertexAttribArray(0)
         
         # Type buffer
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo_type)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._point_vbo_type)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_types.nbytes, self._point_types, GL.GL_STATIC_DRAW)
         GL.glVertexAttribIPointer(1, 1, GL.GL_INT, 4, None)
         GL.glEnableVertexAttribArray(1)
         
-        self._point_shader.use()
-        self._point_shader.set_vec2("textureOffset", offset_coord[0] * 2.0, -offset_coord[1] * 2.0)
-        
-        # Draw each box as a line loop (4 vertices per box)
-        for i in range(self._num_boxes):
-            GL.glDrawArrays(GL.GL_LINE_LOOP, i * 4, 4)
-        
-        GL.glDeleteBuffers(1, [vbo_pos])
-        GL.glDeleteBuffers(1, [vbo_type])
-        GL.glDeleteVertexArrays(1, [vao])
-        
-        return None
+        GL.glBindVertexArray(0)
 
     def _update_warp_points(self, coord_array: np.ndarray, display_aspect: float):
         """Update warp and texture point lists when coord_array changes."""
@@ -215,45 +222,14 @@ class WarpRenderer:
         self._point_types = np.array(all_types, dtype=np.int32)
         self._num_boxes = len(all_types) // 4
 
-
-
-    def _render_point_square(self, x: float, y: float, offset_x: float, offset_y: float, color: list[float]):
-        """Render a single point square using line loop."""
-        # Convert from [0,1] screen coordinates to [-1,1] NDC coordinates
-        ndc_x = x * 2.0 - 1.0
-        ndc_y = (1.0 - y) * 2.0 - 1.0  # Flip Y
-        ndc_offset_x = offset_x * 2.0
-        ndc_offset_y = offset_y * 2.0
-        
-        # Create temporary VAO for this point
-        vao = GL.glGenVertexArrays(1)
-        vbo = GL.glGenBuffers(1)
-        
-        vertices = np.array([
-            ndc_x - ndc_offset_x, ndc_y - ndc_offset_y,  # 0: bottom left
-            ndc_x + ndc_offset_x, ndc_y - ndc_offset_y,  # 1: bottom right  
-            ndc_x + ndc_offset_x, ndc_y + ndc_offset_y,  # 2: top right
-            ndc_x - ndc_offset_x, ndc_y + ndc_offset_y,  # 3: top left
-        ], dtype=np.float32)
-        
-        GL.glBindVertexArray(vao)
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, vbo)
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL.GL_STATIC_DRAW)
-        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 2 * 4, None)
-        GL.glEnableVertexAttribArray(0)
-        
-        self._point_shader.use()
-        self._point_shader.set_vec3("color", color[0], color[1], color[2])
-        
-        # Draw as line strip to form a box
-        GL.glDrawArrays(GL.GL_LINE_LOOP, 0, 4)
-        
-        GL.glBindVertexArray(0)
-        GL.glDeleteBuffers(1, [vbo])
-        GL.glDeleteVertexArrays(1, [vao])
-
     def cleanup(self):
         """Clean up shader resources."""
+        if self._point_vao:
+            GL.glDeleteVertexArrays(1, [self._point_vao])
+            GL.glDeleteBuffers(1, [self._point_vbo_pos])
+            GL.glDeleteBuffers(1, [self._point_vbo_type])
+            self._point_vao = None
+            
         if self._warp_shader:
             self._warp_shader.release()
             self._warp_shader = None
