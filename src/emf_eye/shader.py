@@ -55,10 +55,10 @@ class Shader:
         """Use this shader program."""
         GL.glUseProgram(self._program)
 
-    def set_float(self: Self, name: str, value: float) -> None:
-        """Set a float uniform value."""
+    def set_bool(self: Self, name: str, value: bool) -> None:
+        """Set a bool uniform value."""
         location = GL.glGetUniformLocation(self._program, name)
-        GL.glUniform1f(location, value)
+        GL.glUniform1i(location, 1 if value else 0)
 
     def set_vec2(self: Self, name: str, x: float, y: float) -> None:
         """Set a vec2 uniform value."""
@@ -194,20 +194,10 @@ in vec2 TexCoord;
 
 uniform sampler2D texture1;
 uniform vec2 offset;
-uniform bool invertX;
 
 void main()
 {
-    vec2 tc = TexCoord;
-    
-    // Apply offset
-    tc += offset;
-    
-    // Apply inversion if needed
-    if (invertX) {
-        tc.x = 1.0 - tc.x;
-    }
-    
+    vec2 tc = TexCoord + offset;
     FragColor = texture(texture1, tc);
 }
 """
