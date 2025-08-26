@@ -13,13 +13,14 @@ log = logging.getLogger("shader")
 class Shader:
     """Shader program wrapper."""
 
-    def __init__(self: Self, vertex_source: str, fragment_source: str) -> None:
+    def __init__(self: Self, vertex_source: str, fragment_source: str, geometry_source: str = None) -> None:
         """
         Create a shader program from vertex and fragment shader sources.
 
         Args:
             vertex_source (str): Vertex shader source code
             fragment_source (str): Fragment shader source code
+            geometry_source (str): Optional geometry shader source code
 
         """
         self._program = None
@@ -30,11 +31,17 @@ class Shader:
         # Compile shaders
         vertex_shader = shaders.compileShader(vertex_source, GL.GL_VERTEX_SHADER)
         fragment_shader = shaders.compileShader(fragment_source, GL.GL_FRAGMENT_SHADER)
+        
+        geometry_shader = None
+        if geometry_source:
+            geometry_shader = shaders.compileShader(geometry_source, GL.GL_GEOMETRY_SHADER)
 
-        # Create program (without validation to avoid VAO binding issues during init)
+        # Create program
         self._program = GL.glCreateProgram()
         GL.glAttachShader(self._program, vertex_shader)
         GL.glAttachShader(self._program, fragment_shader)
+        if geometry_shader:
+            GL.glAttachShader(self._program, geometry_shader)
         GL.glLinkProgram(self._program)
 
         # Check for linking errors
@@ -45,6 +52,8 @@ class Shader:
         # Clean up individual shaders
         GL.glDeleteShader(vertex_shader)
         GL.glDeleteShader(fragment_shader)
+        if geometry_shader:
+            GL.glDeleteShader(geometry_shader)
 
         # Create VAO, VBO, EBO
         self._vao = GL.glGenVertexArrays(1)
@@ -59,6 +68,11 @@ class Shader:
         """Set a bool uniform value."""
         location = GL.glGetUniformLocation(self._program, name)
         GL.glUniform1i(location, 1 if value else 0)
+
+    def set_float(self: Self, name: str, value: float) -> None:
+        """Set a float uniform value."""
+        location = GL.glGetUniformLocation(self._program, name)
+        GL.glUniform1f(location, value)
 
     def set_vec2(self: Self, name: str, x: float, y: float) -> None:
         """Set a vec2 uniform value."""
@@ -211,23 +225,66 @@ POINT_VERTEX_SHADER = """
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in int aIsTexture;
 
-out vec3 vertexColor;
+out int isTexture;
+out vec2 position;
 
 uniform vec2 textureOffset;
 
 void main()
 {
-    vec2 pos = aPos;
+    position = aPos;
     
     // Apply offset for texture points
     if (aIsTexture == 1) {
-        pos += textureOffset;
+        position += textureOffset;
     }
     
-    gl_Position = vec4(pos, 0.0, 1.0);
+    isTexture = aIsTexture;
+}
+"""
+
+POINT_GEOMETRY_SHADER = """
+#version 330 core
+layout (points) in;
+layout (line_strip, max_vertices = 5) out;
+
+in int isTexture[];
+in vec2 position[];
+
+out vec3 vertexColor;
+
+uniform float displayAspect;
+
+void main()
+{
+    vec2 pos = position[0];
+    
+    // Convert to NDC
+    float ndc_x = pos.x * 2.0 - 1.0;
+    float ndc_y = (1.0 - pos.y) * 2.0 - 1.0;
+    float offset_x = 0.002 * 2.0;
+    float offset_y = 0.002 * 2.0 * displayAspect;
     
     // Set color: green for warp points, red for texture points
-    vertexColor = (aIsTexture == 1) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    vertexColor = (isTexture[0] == 1) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+    
+    // Generate box vertices (line loop)
+    gl_Position = vec4(ndc_x - offset_x, ndc_y - offset_y, 0.0, 1.0);
+    EmitVertex();
+    
+    gl_Position = vec4(ndc_x + offset_x, ndc_y - offset_y, 0.0, 1.0);
+    EmitVertex();
+    
+    gl_Position = vec4(ndc_x + offset_x, ndc_y + offset_y, 0.0, 1.0);
+    EmitVertex();
+    
+    gl_Position = vec4(ndc_x - offset_x, ndc_y + offset_y, 0.0, 1.0);
+    EmitVertex();
+    
+    gl_Position = vec4(ndc_x - offset_x, ndc_y - offset_y, 0.0, 1.0);
+    EmitVertex();
+    
+    EndPrimitive();
 }
 """
 
@@ -249,4 +306,4 @@ def create_warp_shader() -> Shader:
 
 def create_point_shader() -> Shader:
     """Create the point rendering shader."""
-    return Shader(POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER)
+    return Shader(POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER, POINT_GEOMETRY_SHADER)

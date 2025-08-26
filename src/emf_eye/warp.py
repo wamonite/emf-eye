@@ -70,9 +70,10 @@ class WarpRenderer:
         GL.glBindTexture(GL.GL_TEXTURE_2D, tx_ref)
 
         # Convert coord_array to vertex data for shader rendering
-        if not hasattr(self, '_cached_coord_array') or not np.array_equal(self._cached_coord_array, coord_array):
+        coord_hash = hash(coord_array.data.tobytes())
+        if not hasattr(self, '_cached_coord_hash') or self._cached_coord_hash != coord_hash:
             self._setup_warp_mesh(coord_array, offset_coord, invert_x)
-            self._cached_coord_array = coord_array.copy()
+            self._cached_coord_hash = coord_hash
             self._coord_array_changed = True
         
         self._warp_shader.use()
@@ -147,11 +148,11 @@ class WarpRenderer:
             self._coord_array_changed = False
         
         self._point_shader.use()
-        self._point_shader.set_vec2("textureOffset", offset_coord[0] * 2.0, -offset_coord[1] * 2.0)
+        self._point_shader.set_vec2("textureOffset", offset_coord[0], offset_coord[1])
+        self._point_shader.set_float("displayAspect", display_aspect)
         
         GL.glBindVertexArray(self._point_vao)
-        for i in range(self._num_boxes):
-            GL.glDrawArrays(GL.GL_LINE_LOOP, i * 4, 4)
+        GL.glDrawArrays(GL.GL_POINTS, 0, self._num_points)
         GL.glBindVertexArray(0)
         
         return None
@@ -183,44 +184,25 @@ class WarpRenderer:
         """Update warp and texture point lists when coord_array changes."""
         d_y_size, d_x_size, _ = coord_array.shape
         
-        # Create box template
-        offset_x = POINT_OFFSET * 2.0
-        offset_y = POINT_OFFSET * 2.0 * display_aspect
-        box_template = np.array([
-            -offset_x, -offset_y,
-            offset_x, -offset_y,
-            offset_x, offset_y,
-            -offset_x, offset_y,
-        ], dtype=np.float32)
-        
-        all_vertices = []
+        all_points = []
         all_types = []
         
         for s_y_idx in range(d_y_size - 1):
             for s_x_idx in range(d_x_size):
                 # Warp points (from coord_array)
                 for warp_pos in [coord_array[s_y_idx, s_x_idx], coord_array[s_y_idx + 1, s_x_idx]]:
-                    ndc_x = warp_pos[0] * 2.0 - 1.0
-                    ndc_y = (1.0 - warp_pos[1]) * 2.0 - 1.0
-                    
-                    for j in range(0, 8, 2):
-                        all_vertices.extend([ndc_x + box_template[j], ndc_y + box_template[j+1]])
-                        all_types.append(0)
+                    all_points.extend(warp_pos)
+                    all_types.append(0)
                 
                 # Texture points (original grid)
                 s_x_pos = s_x_idx / (d_x_size - 1)
                 s_y_pos = s_y_idx / (d_y_size - 1)
-                
-                ndc_x = s_x_pos * 2.0 - 1.0
-                ndc_y = (1.0 - s_y_pos) * 2.0 - 1.0
-                
-                for j in range(0, 8, 2):
-                    all_vertices.extend([ndc_x + box_template[j], ndc_y + box_template[j+1]])
-                    all_types.append(1)
+                all_points.extend([s_x_pos, s_y_pos])
+                all_types.append(1)
         
-        self._point_vertices = np.array(all_vertices, dtype=np.float32)
+        self._point_vertices = np.array(all_points, dtype=np.float32)
         self._point_types = np.array(all_types, dtype=np.int32)
-        self._num_boxes = len(all_types) // 4
+        self._num_points = self._point_types.size
 
     def cleanup(self):
         """Clean up shader resources."""
