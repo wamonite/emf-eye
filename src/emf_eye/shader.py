@@ -7,6 +7,8 @@ import numpy as np
 from OpenGL import GL
 from OpenGL.GL import shaders
 
+from .exceptions import ScriptError
+
 log = logging.getLogger("shader")
 
 
@@ -31,7 +33,7 @@ class Shader:
         # Compile shaders
         vertex_shader = shaders.compileShader(vertex_source, GL.GL_VERTEX_SHADER)
         fragment_shader = shaders.compileShader(fragment_source, GL.GL_FRAGMENT_SHADER)
-        
+
         geometry_shader = None
         if geometry_source:
             geometry_shader = shaders.compileShader(geometry_source, GL.GL_GEOMETRY_SHADER)
@@ -47,7 +49,7 @@ class Shader:
         # Check for linking errors
         if not GL.glGetProgramiv(self._program, GL.GL_LINK_STATUS):
             error = GL.glGetProgramInfoLog(self._program)
-            raise RuntimeError(f"Shader program linking failed: {error}")
+            raise ScriptError(f"Shader program linking failed: {error}")
 
         # Clean up individual shaders
         GL.glDeleteShader(vertex_shader)
@@ -60,6 +62,8 @@ class Shader:
         self._vbo = GL.glGenBuffers(1)
         self._ebo = GL.glGenBuffers(1)
 
+        self._num_indices = 0
+
     def use(self: Self) -> None:
         """Use this shader program."""
         GL.glUseProgram(self._program)
@@ -69,20 +73,15 @@ class Shader:
         location = GL.glGetUniformLocation(self._program, name)
         GL.glUniform1i(location, 1 if value else 0)
 
-    def set_float(self: Self, name: str, value: float) -> None:
+    def set_float1(self: Self, name: str, value: float) -> None:
         """Set a float uniform value."""
         location = GL.glGetUniformLocation(self._program, name)
         GL.glUniform1f(location, value)
 
-    def set_vec2(self: Self, name: str, x: float, y: float) -> None:
+    def set_float2(self: Self, name: str, x: float, y: float) -> None:
         """Set a vec2 uniform value."""
         location = GL.glGetUniformLocation(self._program, name)
         GL.glUniform2f(location, x, y)
-
-    def set_vec3(self: Self, name: str, x: float, y: float, z: float) -> None:
-        """Set a vec3 uniform value."""
-        location = GL.glGetUniformLocation(self._program, name)
-        GL.glUniform3f(location, x, y, z)
 
     def set_int(self: Self, name: str, value: int) -> None:
         """Set an int uniform value."""
@@ -98,6 +97,8 @@ class Shader:
             indices (np.ndarray): Index data for drawing
 
         """
+        self._num_indices = len(indices)
+
         GL.glBindVertexArray(self._vao)
 
         # Load vertex data
@@ -108,33 +109,27 @@ class Shader:
         GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, self._ebo)
         GL.glBufferData(GL.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL.GL_STATIC_DRAW)
 
-        # Determine stride based on vertex data
-        if len(vertices) % 4 == 0:  # Position + texcoord (4 floats per vertex)
-            stride = 4 * 4
-            # Position attribute
-            GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, None)
-            GL.glEnableVertexAttribArray(0)
-            # Texture coordinate attribute
-            GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(2 * 4))
-            GL.glEnableVertexAttribArray(1)
-        else:  # Position only (2 floats per vertex)
-            stride = 2 * 4
-            # Position attribute only
-            GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, None)
-            GL.glEnableVertexAttribArray(0)
+        # Position + texcoord (4 floats per vertex)
+        coord_size = 2 * 4
+        stride = 2 * coord_size
+        # Position attribute
+        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, None)
+        GL.glEnableVertexAttribArray(0)
+        # Texture coordinate attribute
+        GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, stride, GL.ctypes.c_void_p(coord_size))
+        GL.glEnableVertexAttribArray(1)
 
         GL.glBindVertexArray(0)
 
-    def draw_mesh(self: Self, count: int) -> None:
+    def draw_mesh(self: Self) -> None:
         """
         Draw the mesh using the current shader.
-        
-        Args:
-            count (int): Number of indices to draw
-
         """
+        if not self._num_indices:
+            return
+
         GL.glBindVertexArray(self._vao)
-        GL.glDrawElements(GL.GL_TRIANGLES, count, GL.GL_UNSIGNED_INT, None)
+        GL.glDrawElements(GL.GL_TRIANGLES, self._num_indices, GL.GL_UNSIGNED_INT, None)
         GL.glBindVertexArray(0)
 
     def release(self: Self) -> None:
@@ -155,36 +150,6 @@ class Shader:
             GL.glDeleteProgram(self._program)
             self._program = None
 
-
-# Default shader sources
-DEFAULT_VERTEX_SHADER = """
-#version 330 core
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aTexCoord;
-
-out vec2 TexCoord;
-
-void main()
-{
-    gl_Position = vec4(aPos.x * 2.0 - 1.0, aPos.y * 2.0 - 1.0, 0.0, 1.0);
-    TexCoord = aTexCoord;
-}
-"""
-
-DEFAULT_FRAGMENT_SHADER = """
-#version 330 core
-out vec4 FragColor;
-
-in vec2 TexCoord;
-
-uniform sampler2D texture1;
-uniform vec2 offset;
-
-void main()
-{
-    FragColor = texture(texture1, TexCoord + offset);
-}
-"""
 
 WARP_VERTEX_SHADER = """
 #version 330 core
@@ -216,9 +181,9 @@ void main()
 }
 """
 
-def create_default_shader() -> Shader:
-    """Create the default shader."""
-    return Shader(DEFAULT_VERTEX_SHADER, DEFAULT_FRAGMENT_SHADER)
+def create_warp_shader() -> Shader:
+    """Create the warp shader."""
+    return Shader(WARP_VERTEX_SHADER, WARP_FRAGMENT_SHADER)
 
 POINT_VERTEX_SHADER = """
 #version 330 core
@@ -299,10 +264,6 @@ void main()
     FragColor = vec4(vertexColor, 1.0);
 }
 """
-
-def create_warp_shader() -> Shader:
-    """Create the warp shader."""
-    return Shader(WARP_VERTEX_SHADER, WARP_FRAGMENT_SHADER)
 
 def create_point_shader() -> Shader:
     """Create the point rendering shader."""

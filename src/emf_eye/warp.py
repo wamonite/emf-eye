@@ -9,7 +9,7 @@ from OpenGL import GL
 
 from .controller import Controller
 from .exceptions import ScriptError
-from .shader import create_warp_shader, create_point_shader
+from .shader import create_point_shader, create_warp_shader
 
 log = logging.getLogger("warp")
 
@@ -39,6 +39,7 @@ class WarpRenderer:
     def __init__(self):
         self._warp_shader = None
         self._point_shader = None
+        self._cached_coord_hash = None
         self._coord_array_changed = True
         self._point_vao = None
         self._point_vbo_pos = None
@@ -71,90 +72,81 @@ class WarpRenderer:
 
         # Convert coord_array to vertex data for shader rendering
         coord_hash = hash(coord_array.data.tobytes())
-        if not hasattr(self, '_cached_coord_hash') or self._cached_coord_hash != coord_hash:
+        if self._cached_coord_hash != coord_hash:
             self._setup_warp_mesh(coord_array, offset_coord, invert_x)
             self._cached_coord_hash = coord_hash
             self._coord_array_changed = True
-        
+
         self._warp_shader.use()
         self._warp_shader.set_int("texture1", 0)
-        self._warp_shader.set_vec2("offset", offset_coord[0], offset_coord[1])
-        
-        # Draw the warp mesh
-        self._draw_warp_mesh()
+        self._warp_shader.set_float2("offset", offset_coord[0], offset_coord[1])
+
+        self._warp_shader.draw_mesh()
 
         GL.glBindTexture(GL.GL_TEXTURE_2D, 0)
-        
+
         # Render points if enabled
-        selected = None
         if show_points:
-            selected = self._render_points(coord_array, display_resolution, mouse_pos, offset_coord)
-        
-        return selected
+            self._render_points(coord_array, display_resolution, offset_coord)
 
     def _setup_warp_mesh(self, coord_array: np.ndarray, offset_coord: tuple[float, float], invert_x: bool):
         """Convert coord_array to mesh data matching original render_warp behavior."""
         d_y_size, d_x_size, _ = coord_array.shape
-        
+
         vertices = []
         indices = []
         vertex_count = 0
-        
+
         for s_y_idx in range(d_y_size - 1):
             s_y_pos_0 = s_y_idx / (d_y_size - 1)
             s_y_pos_1 = (s_y_idx + 1) / (d_y_size - 1)
-            
+
             for s_x_idx in range(d_x_size):
                 s_x_pos = s_x_idx / (d_x_size - 1)
                 if invert_x:
                     s_x_pos = 1.0 - s_x_pos
-                
+
                 d_pos_0 = coord_array[s_y_idx, s_x_idx]
                 d_pos_1 = coord_array[s_y_idx + 1, s_x_idx]
-                
+
                 # Add vertices (position, texcoord)
                 vertices.extend([
                     d_pos_0[0], d_pos_0[1], s_x_pos, s_y_pos_0,
-                    d_pos_1[0], d_pos_1[1], s_x_pos, s_y_pos_1
+                    d_pos_1[0], d_pos_1[1], s_x_pos, s_y_pos_1,
                 ])
-                
+
                 if s_x_idx < d_x_size - 1:
                     # Create quad with two triangles
                     indices.extend([
                         vertex_count, vertex_count + 2, vertex_count + 1,
-                        vertex_count + 1, vertex_count + 2, vertex_count + 3
+                        vertex_count + 1, vertex_count + 2, vertex_count + 3,
                     ])
-                
+
                 vertex_count += 2
-        
-        self._warp_vertices = np.array(vertices, dtype=np.float32)
-        self._warp_indices = np.array(indices, dtype=np.uint32)
-        
+
+        warp_vertices = np.array(vertices, dtype=np.float32)
+        warp_indices = np.array(indices, dtype=np.uint32)
+
         # Update mesh
-        self._warp_shader.setup_mesh(self._warp_vertices, self._warp_indices)
+        self._warp_shader.setup_mesh(warp_vertices, warp_indices)
 
-    def _draw_warp_mesh(self):
-        """Draw the warp mesh."""
-        if hasattr(self, '_warp_indices'):
-            self._warp_shader.draw_mesh(len(self._warp_indices))
-
-    def _render_points(self, coord_array: np.ndarray, display_resolution: tuple[int, int], mouse_pos: tuple[float, float] | None, offset_coord: tuple[float, float]):
+    def _render_points(self, coord_array: np.ndarray, display_resolution: tuple[int, int], offset_coord: tuple[float, float]):
         """Render debug points using shaders."""
         display_aspect = display_resolution[0] / display_resolution[1]
-        
+
         if not hasattr(self, '_point_vertices') or self._coord_array_changed:
             self._update_warp_points(coord_array, display_aspect)
             self._setup_point_buffers()
             self._coord_array_changed = False
-        
+
         self._point_shader.use()
-        self._point_shader.set_vec2("textureOffset", offset_coord[0], offset_coord[1])
-        self._point_shader.set_float("displayAspect", display_aspect)
-        
+        self._point_shader.set_float2("textureOffset", offset_coord[0], offset_coord[1])
+        self._point_shader.set_float1("displayAspect", display_aspect)
+
         GL.glBindVertexArray(self._point_vao)
         GL.glDrawArrays(GL.GL_POINTS, 0, self._num_points)
         GL.glBindVertexArray(0)
-        
+
         return None
 
     def _setup_point_buffers(self):
@@ -163,43 +155,43 @@ class WarpRenderer:
             self._point_vao = GL.glGenVertexArrays(1)
             self._point_vbo_pos = GL.glGenBuffers(1)
             self._point_vbo_type = GL.glGenBuffers(1)
-        
+
         GL.glBindVertexArray(self._point_vao)
-        
+
         # Position buffer
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._point_vbo_pos)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_vertices.nbytes, self._point_vertices, GL.GL_STATIC_DRAW)
         GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 8, None)
         GL.glEnableVertexAttribArray(0)
-        
+
         # Type buffer
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._point_vbo_type)
         GL.glBufferData(GL.GL_ARRAY_BUFFER, self._point_types.nbytes, self._point_types, GL.GL_STATIC_DRAW)
         GL.glVertexAttribIPointer(1, 1, GL.GL_INT, 4, None)
         GL.glEnableVertexAttribArray(1)
-        
+
         GL.glBindVertexArray(0)
 
     def _update_warp_points(self, coord_array: np.ndarray, display_aspect: float):
         """Update warp and texture point lists when coord_array changes."""
         d_y_size, d_x_size, _ = coord_array.shape
-        
+
         all_points = []
         all_types = []
-        
+
         for s_y_idx in range(d_y_size - 1):
             for s_x_idx in range(d_x_size):
                 # Warp points (from coord_array)
                 for warp_pos in [coord_array[s_y_idx, s_x_idx], coord_array[s_y_idx + 1, s_x_idx]]:
                     all_points.extend(warp_pos)
                     all_types.append(0)
-                
+
                 # Texture points (original grid)
                 s_x_pos = s_x_idx / (d_x_size - 1)
                 s_y_pos = s_y_idx / (d_y_size - 1)
                 all_points.extend([s_x_pos, s_y_pos])
                 all_types.append(1)
-        
+
         self._point_vertices = np.array(all_points, dtype=np.float32)
         self._point_types = np.array(all_types, dtype=np.int32)
         self._num_points = self._point_types.size
@@ -211,7 +203,7 @@ class WarpRenderer:
             GL.glDeleteBuffers(1, [self._point_vbo_pos])
             GL.glDeleteBuffers(1, [self._point_vbo_type])
             self._point_vao = None
-            
+
         if self._warp_shader:
             self._warp_shader.release()
             self._warp_shader = None
